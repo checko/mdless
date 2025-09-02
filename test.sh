@@ -29,4 +29,15 @@ run_test Smoke test/smoke/MainSmoke.kt
 # IR
 run_test IrTest test/ir/IrTest.kt src/ir/Ir.kt
 
+# Width (ASCII)
+run_test WidthAsciiTest test/layout/WidthAsciiTest.kt src/layout/Width.kt
+
+# Layout paragraphs/headings
+run_test LayoutParaTest test/layout/LayoutParaTest.kt \
+  src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt
+
+# Theme & Styler
+run_test ThemeTest test/style/ThemeTest.kt \
+  src/style/Theme.kt src/style/Styler.kt src/ir/Ir.kt
+
 echo "[test] All tests passed."
