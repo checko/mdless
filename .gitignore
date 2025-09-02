@@ -1,0 +1,22 @@
+# Build outputs
+build/
+out/
+dist/
+tmp/
+test-output/
+
+# IDE/editor
+.idea/
+.vscode/
+.DS_Store
+
+# Kotlin/Native artifacts
+**/*.kexe
+**/*.dSYM/
+**/*.o
+**/*.obj
+**/*.klib
+
+# Logs
+*.log
+

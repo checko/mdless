@@ -33,16 +33,17 @@
 - Reload: `R` to reload file on change.
 - Search: regex and incremental search with live highlight.
 
-## Technical Approach
-- Language: Rust preferred (pulldown-cmark for parsing; ratatui/crossterm for TUI; unicode-width/segmentation for correct widths; optional syntect for highlighting). Alternatives: Go (goldmark + tcell) or Python (rich/textual) if speed is secondary.
-- Architecture: parse to styled blocks → layout to lines/spans → pager state (viewport, scroll, search) → terminal renderer. Keep renderer separate from pager for testability.
-- Testing: golden/snapshot tests for rendering; key-handling unit tests; width and wrapping edge cases.
+## Platform & Constraints
+- Language: Kotlin using Kotlin/Native (no JVM runtime).
+- Target OS/Arch: Linux x86_64 on this machine.
+- Toolchain: build with Kotlin/Native compiler at `/home/charles-chang/kotlinrun/kotlin-native-prebuilt-linux-x86_64-2.2.10/bin`.
+- Output: single native CLI binary named `mdless` runnable from the terminal.
+- Runtime deps: standard Linux terminal (ANSI-capable); avoid non-standard daemons or services.
+- Terminal compatibility: behave correctly in typical `xterm`/`vt100` environments; provide a no-color mode.
+- Performance: responsive on Markdown files up to several megabytes; avoid noticeable input latency.
 
-## Questions
-- Language/stack: Rust, Go, or Python?
-- OS targets: Linux/macOS only, or include Windows?
-- Key subset: Is the proposed less-like set sufficient for v1?
-- Syntax highlight: include in MVP or defer?
-- Dependencies: any restrictions on third-party libraries?
-- Theming: need both light/dark and a no-color mode in MVP?
-
+## Deliverables & Acceptance
+- Command `mdless` supports file paths and stdin piping per the CLI section.
+- Implements the MVP feature set above, including navigation keys and search.
+- Provides `--help` with usage, flags, and examples.
+- Includes a simple local build script/instructions using the specified Kotlin/Native toolchain.
