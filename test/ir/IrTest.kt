@@ -3,7 +3,7 @@ import kotlin.system.exitProcess
 
 private fun assertTrue(cond: Boolean, msg: String) {
     if (!cond) {
-        System.err.println("ASSERT FAIL: $msg")
+        println("ASSERT FAIL: $msg")
         exitProcess(1)
     }
 }
@@ -45,4 +45,3 @@ fun main() {
     println("IR TEST OK")
     exitProcess(0)
 }
-

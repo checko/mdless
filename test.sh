@@ -12,7 +12,14 @@ run_test() {
   echo "[test] Building $name"
   "$KOTLINC" -opt -o "$out" "$@"
   echo "[test] Running $name"
-  "$out" || { echo "[test] FAIL: $name"; exit 1; }
+  if [[ -x "$out" ]]; then
+    "$out" || { echo "[test] FAIL: $name"; exit 1; }
+  elif [[ -x "$out.kexe" ]]; then
+    "$out.kexe" || { echo "[test] FAIL: $name"; exit 1; }
+  else
+    echo "[test] FAIL: $name (no runnable output at $out or $out.kexe)"
+    exit 1
+  fi
   echo "[test] PASS: $name"
 }
 
@@ -23,4 +30,3 @@ run_test Smoke test/smoke/MainSmoke.kt
 run_test IrTest test/ir/IrTest.kt src/ir/Ir.kt
 
 echo "[test] All tests passed."
-
