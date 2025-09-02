@@ -52,6 +52,10 @@ class PagerState(
         scrollLines(n * height)
     }
 
+    fun setTopLine(line: Int) {
+        topLine = line.coerceIn(0, maxTop())
+    }
+
     fun viewportRange(): IntRange {
         val start = topLine
         val endExclusive = (topLine + height).coerceAtMost(totalLines)
@@ -104,4 +108,3 @@ class PagerState(
         return ids.size - 1
     }
 }
-

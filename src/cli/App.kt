@@ -12,9 +12,12 @@ object App {
             KeyCmd.Top -> pager.jumpToTop()
             KeyCmd.Bottom -> pager.jumpToBottom()
             KeyCmd.None -> {}
+            KeyCmd.SearchForward -> {}
+            KeyCmd.SearchBackward -> {}
+            KeyCmd.SearchNext -> {}
+            KeyCmd.SearchPrev -> {}
             KeyCmd.Quit -> return false
         }
         return true
     }
 }
-

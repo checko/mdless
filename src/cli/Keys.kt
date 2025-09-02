@@ -1,6 +1,6 @@
 package cli
 
-enum class KeyCmd { Down, Up, PageDown, PageUp, Top, Bottom, Quit, None }
+enum class KeyCmd { Down, Up, PageDown, PageUp, Top, Bottom, Quit, SearchForward, SearchBackward, SearchNext, SearchPrev, None }
 
 object KeyMap {
     fun fromChar(c: Char): KeyCmd = when (c) {
@@ -10,8 +10,11 @@ object KeyMap {
         'b' -> KeyCmd.PageUp
         'g' -> KeyCmd.Top
         'G' -> KeyCmd.Bottom
+        '/' -> KeyCmd.SearchForward
+        '?' -> KeyCmd.SearchBackward
+        'n' -> KeyCmd.SearchNext
+        'N' -> KeyCmd.SearchPrev
         'q' -> KeyCmd.Quit
         else -> KeyCmd.None
     }
 }
-

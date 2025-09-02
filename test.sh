@@ -56,4 +56,8 @@ run_test PagerTest test/pager/PagerTest.kt \
 run_test AppKeysTest test/cli/AppKeysTest.kt \
   src/cli/App.kt src/cli/Keys.kt src/pager/Pager.kt
 
+# Search
+run_test SearchTest test/pager/SearchTest.kt \
+  src/pager/Search.kt src/ir/Ir.kt
+
 echo "[test] All tests passed."

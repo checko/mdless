@@ -8,6 +8,7 @@ import layout.Layout
 import parser.Parser
 import pager.BlockLines
 import pager.PagerState
+import pager.Search
 import render.Renderer
 import tty.Tty
 import kotlin.system.exitProcess
@@ -88,6 +89,40 @@ private fun clearScreen() {
     print("\u001B[2J\u001B[H")
 }
 
+private fun promptLine(prefix: String): String? {
+    // Simple inline prompt; ESC cancels; Enter submits; Backspace supported
+    print(prefix)
+    val buf = StringBuilder()
+    while (true) {
+        val b = tty.Tty.readByte()
+        if (b < 0) continue
+        when (b) {
+            27 -> { // ESC
+                println()
+                return null
+            }
+            10, 13 -> { // Enter
+                println()
+                return buf.toString()
+            }
+            127 -> { // Backspace
+                if (buf.isNotEmpty()) {
+                    buf.deleteAt(buf.length - 1)
+                    // Erase last char visually
+                    print("\b \b")
+                }
+            }
+            else -> {
+                val ch = b.toChar()
+                if (ch.code in 32..126) { // printable ASCII
+                    buf.append(ch)
+                    print(ch)
+                }
+            }
+        }
+    }
+}
+
 fun main(args: Array<String>) {
     if (args.contains("-h") || args.contains("--help")) {
         printHelp()
@@ -124,6 +159,8 @@ fun main(args: Array<String>) {
     }
 
     val pager = PagerState(meta, height)
+    var lastQuery: String? = null
+    var lastDir: Int = 1 // 1 forward, -1 backward
     Tty.withRawMode {
         var running = true
         while (running) {
@@ -144,16 +181,37 @@ fun main(args: Array<String>) {
             val out = Renderer.render(slice, enableColor = false)
             print(out)
             // status line
-            println("-- ${pager.percent()}% (q to quit) --")
+            println("-- ${pager.percent()}% (q quit, / ? search) --")
 
             val b = tty.Tty.readByte()
             if (b >= 0) {
                 val c = b.toChar()
                 val cmd = KeyMap.fromChar(c)
-                if (cmd == KeyCmd.Quit) {
-                    running = false
-                } else {
-                    App.handleKey(pager, cmd)
+                when (cmd) {
+                    KeyCmd.Quit -> running = false
+                    KeyCmd.SearchForward, KeyCmd.SearchBackward -> {
+                        val forward = (cmd == KeyCmd.SearchForward)
+                        val q = promptLine(if (forward) "/" else "?")
+                        if (q != null && q.isNotEmpty()) {
+                            lastQuery = q
+                            lastDir = if (forward) 1 else -1
+                            val start = pager.viewportRange().first
+                            val hit = if (forward) Search.findNext(lines, q, start) else Search.findPrev(lines, q, start)
+                            if (hit != null) pager.setTopLine(hit)
+                        }
+                    }
+                    KeyCmd.SearchNext, KeyCmd.SearchPrev -> {
+                        val q = lastQuery
+                        if (q != null && q.isNotEmpty()) {
+                            val forward = if (cmd == KeyCmd.SearchNext) lastDir == 1 else lastDir == -1
+                            val start = pager.viewportRange().first
+                            val hit = if (forward) Search.findNext(lines, q, start) else Search.findPrev(lines, q, start)
+                            if (hit != null) pager.setTopLine(hit)
+                        }
+                    }
+                    else -> {
+                        App.handleKey(pager, cmd)
+                    }
                 }
             }
         }
