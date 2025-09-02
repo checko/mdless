@@ -40,4 +40,20 @@ run_test LayoutParaTest test/layout/LayoutParaTest.kt \
 run_test ThemeTest test/style/ThemeTest.kt \
   src/style/Theme.kt src/style/Styler.kt src/ir/Ir.kt
 
+# Renderer
+run_test RendererTest test/render/RendererTest.kt \
+  src/render/Renderer.kt src/ir/Ir.kt
+
+# Parser basic
+run_test ParserBasicTest test/parser/ParserBasicTest.kt \
+  src/parser/Parser.kt src/ir/Ir.kt
+
+# Pager
+run_test PagerTest test/pager/PagerTest.kt \
+  src/pager/Pager.kt
+
+# App key handling (no TTY)
+run_test AppKeysTest test/cli/AppKeysTest.kt \
+  src/cli/App.kt src/cli/Keys.kt src/pager/Pager.kt
+
 echo "[test] All tests passed."
