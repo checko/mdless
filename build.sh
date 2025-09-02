@@ -11,5 +11,11 @@ echo "[build] Compiling application to $APP_OUT"
 "$KOTLINC" -opt -o "$APP_OUT" \
   src/**/*.kt
 
-echo "[build] Done: $APP_OUT (or $APP_OUT.kexe depending on platform)"
+# Kotlin/Native may emit a .kexe on Linux; normalize to 'mdless'
+if [[ -f "$APP_OUT.kexe" ]]; then
+  mv -f "$APP_OUT.kexe" "$APP_OUT"
+fi
 
+chmod +x "$APP_OUT" || true
+
+echo "[build] Done: $APP_OUT"

@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 import cli.KeyMap
 import cli.KeyCmd
 import cli.App
@@ -65,8 +67,9 @@ private fun readAllStdin(): String {
     memScoped {
         val buf = ByteArray(4096)
         while (true) {
-            val n = platform.posix.read(platform.posix.STDIN_FILENO, buf.refTo(0), buf.size.convert())
-            if (n <= 0) break
+            val nLong = platform.posix.read(platform.posix.STDIN_FILENO, buf.refTo(0), buf.size.convert())
+            if (nLong <= 0) break
+            val n = nLong.toInt()
             val s = buf.copyOf(n).decodeToString()
             sb.append(s)
         }
