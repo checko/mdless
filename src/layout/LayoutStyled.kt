@@ -15,6 +15,7 @@ object LayoutStyled {
             is BlockKind.CodeBlock -> layoutCodeBlockStyled(block, k, width, theme, tabWidth)
             is BlockKind.ListBlock -> layoutList(block, k, width, theme, tabWidth)
             is BlockKind.Blockquote -> layoutQuote(block, k, width, theme, tabWidth)
+            BlockKind.ThematicBreak -> layoutHr(block, width, theme)
             is BlockKind.Table -> layoutTable(block, k, width, theme, tabWidth)
             else -> emptyList()
         }
@@ -225,13 +226,20 @@ object LayoutStyled {
         return out
     }
 
+    private fun layoutHr(block: Block, width: Int, theme: Theme): List<LayoutLine> {
+        val style = when (theme.mode) { style.ThemeMode.NoColor -> Style() else -> Style(fg = theme.heading) }
+        val line = "-".repeat(width.coerceAtLeast(1))
+        return listOf(LayoutLine(listOf(StyledSpan(line, style)), block.id, 0))
+    }
+
     private fun layoutTable(block: Block, table: BlockKind.Table, width: Int, theme: Theme, tabWidth: Int): List<LayoutLine> {
         val rows = table.rows
         if (rows.isEmpty()) return listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
         val cols = rows.maxOf { it.size }
         if (cols == 0) return listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
         val aligns = Array(cols) { idx -> table.aligns.getOrNull(idx) ?: ir.ColAlign.Left }
-        val padBetween = 1
+        val colSep = " | "
+        val padBetween = colSep.length
         val minCol = 1
 
         val base = when (theme.mode) { style.ThemeMode.NoColor -> Style() else -> Style(fg = theme.text) }
@@ -332,7 +340,7 @@ object LayoutStyled {
             for (k in 0 until rowHeight) {
                 val spans = ArrayList<StyledSpan>()
                 for (j in 0 until cols) {
-                    if (j > 0) spans += StyledSpan(" ", base)
+                    if (j > 0) spans += StyledSpan(colSep, base)
                     val colW = colWidths[j]
                     val cellLine = wrapped[j].getOrNull(k) ?: ""
                     val cellW = Width.stringWidth(cellLine)
@@ -356,6 +364,11 @@ object LayoutStyled {
                     }
                 }
                 out += LayoutLine(spans, block.id, outRow++)
+            }
+            // Add a header separator after first logical row
+            if (outRow == rowHeight) {
+                val sep = "-".repeat(width.coerceAtLeast(1))
+                out += LayoutLine(listOf(StyledSpan(sep, base)), block.id, outRow++)
             }
         }
         if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", base)), block.id, 0)

@@ -16,6 +16,7 @@ object Layout {
             is BlockKind.CodeBlock -> layoutCodeBlock(block, k, width, tabWidth)
             is BlockKind.ListBlock -> layoutList(block, k, width, tabWidth)
             is BlockKind.Blockquote -> layoutBlockquote(block, k, width, tabWidth)
+            BlockKind.ThematicBreak -> layoutHr(block, width)
             is BlockKind.Table -> layoutTable(block, k, width, tabWidth)
             else -> emptyList() // to be implemented later for other kinds
         }
@@ -234,13 +235,19 @@ object Layout {
         return out
     }
 
+    private fun layoutHr(block: Block, width: Int): List<LayoutLine> {
+        val line = "-".repeat(width.coerceAtLeast(1))
+        return listOf(LayoutLine(listOf(StyledSpan(line, Style())), block.id, 0))
+    }
+
     private fun layoutTable(block: Block, table: BlockKind.Table, width: Int, tabWidth: Int): List<LayoutLine> {
         val rows = table.rows
         if (rows.isEmpty()) return listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
         val cols = rows.maxOf { it.size }
         if (cols == 0) return listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
         val aligns = Array(cols) { idx -> table.aligns.getOrNull(idx) ?: ColAlign.Left }
-        val padBetween = 1
+        val colSep = " | "
+        val padBetween = colSep.length
         val minCol = 1
 
         val desired = IntArray(cols) { 1 }
@@ -290,7 +297,7 @@ object Layout {
             for (k in 0 until rowHeight) {
                 val sb = StringBuilder()
                 for (j in 0 until cols) {
-                    if (j > 0) sb.append(' ')
+                    if (j > 0) sb.append(colSep)
                     val colW = colWidths[j]
                     val cellLine = wrappedCells[j].getOrNull(k) ?: ""
                     val cellW = Width.stringWidth(cellLine)
@@ -314,6 +321,11 @@ object Layout {
                     }
                 }
                 out += LayoutLine(listOf(StyledSpan(sb.toString(), Style())), block.id, outRow++)
+            }
+            // Draw a simple header separator after first logical row
+            if (outRow == rowHeight) {
+                val sepLine = "-".repeat(width.coerceAtLeast(1))
+                out += LayoutLine(listOf(StyledSpan(sepLine, Style())), block.id, outRow++)
             }
         }
         if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", Style())), block.id, 0)
