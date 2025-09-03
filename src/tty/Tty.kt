@@ -12,29 +12,33 @@ object Tty {
     class RawToken internal constructor(val old: termios)
 
     fun enableRaw(fd: Int = STDIN_FILENO): RawToken? {
-        memScoped {
-            val orig = alloc<termios>()
-            if (tcgetattr(fd, orig.ptr) != 0) return null
-            val raw = orig
-            // cfmakeraw equivalent
-            val iflagsToClear: UInt = (IGNBRK or BRKINT or PARMRK or ISTRIP or INLCR or IGNCR or ICRNL or IXON).toUInt()
-            val oflagsToClear: UInt = OPOST.toUInt()
-            val lflagsToClear: UInt = (ECHO or ECHONL or ICANON or ISIG or IEXTEN).toUInt()
-            raw.c_iflag = raw.c_iflag and iflagsToClear.inv()
-            raw.c_oflag = raw.c_oflag and oflagsToClear.inv()
-            raw.c_lflag = raw.c_lflag and lflagsToClear.inv()
-            raw.c_cflag = raw.c_cflag or (CS8.toUInt())
-            raw.c_cc[VMIN] = 0.toUByte()   // non-blocking read
-            raw.c_cc[VTIME] = 1.toUByte() // 100ms timeout
-            if (tcsetattr(fd, TCSANOW, raw.ptr) != 0) return null
-            return RawToken(orig)
+        // Allocate persistent copies so we can restore even if we leave scope
+        val orig = nativeHeap.alloc<termios>()
+        if (tcgetattr(fd, orig.ptr) != 0) {
+            nativeHeap.free(orig)
+            return null
         }
+        val raw = nativeHeap.alloc<termios>()
+        // copy orig -> raw
+        platform.posix.memcpy(raw.ptr, orig.ptr, sizeOf<termios>().convert())
+        // cfmakeraw equivalent
+        val iflagsToClear: UInt = (IGNBRK or BRKINT or PARMRK or ISTRIP or INLCR or IGNCR or ICRNL or IXON).toUInt()
+        val oflagsToClear: UInt = OPOST.toUInt()
+        val lflagsToClear: UInt = (ECHO or ECHONL or ICANON or ISIG or IEXTEN).toUInt()
+        raw.c_iflag = raw.c_iflag and iflagsToClear.inv()
+        raw.c_oflag = raw.c_oflag and oflagsToClear.inv()
+        raw.c_lflag = raw.c_lflag and lflagsToClear.inv()
+        raw.c_cflag = raw.c_cflag or (CS8.toUInt())
+        raw.c_cc[VMIN] = 0.toUByte()   // non-blocking read
+        raw.c_cc[VTIME] = 1.toUByte() // 100ms timeout
+        val ok = tcsetattr(fd, TCSANOW, raw.ptr) == 0
+        nativeHeap.free(raw)
+        return if (ok) RawToken(orig) else { nativeHeap.free(orig); null }
     }
 
     fun restoreRaw(token: RawToken, fd: Int = STDIN_FILENO) {
-        memScoped {
-            tcsetattr(fd, TCSANOW, token.old.ptr)
-        }
+        tcsetattr(fd, TCSANOW, token.old.ptr)
+        nativeHeap.free(token.old)
     }
 
     inline fun <R> withRawMode(fd: Int = STDIN_FILENO, body: () -> R): R {
