@@ -142,6 +142,8 @@ private fun promptLine(prefix: String): String? {
 }
 
 fun main(args: Array<String>) {
+    // Ensure Unicode width functions (wcwidth) use user's locale for accurate column widths
+    platform.posix.setlocale(platform.posix.LC_ALL, "")
     val (opts, positionals) = parseOptions(args)
 
     val input: String
