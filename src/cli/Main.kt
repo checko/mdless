@@ -228,8 +228,7 @@ fun main(args: Array<String>) {
 
             val b = tty.Tty.readByte()
             if (b >= 0) {
-                val c = b.toChar()
-                val cmd = KeyMap.fromChar(c)
+                val cmd = KeyMap.readCmd(b)
                 when (cmd) {
                     KeyCmd.Quit -> running = false
                     KeyCmd.SearchForward, KeyCmd.SearchBackward -> {
