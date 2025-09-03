@@ -56,15 +56,8 @@ object Layout {
 
     private fun takeByWidthRaw(s: String, maxWidth: Int): String {
         if (s.isEmpty() || maxWidth <= 0) return ""
-        var w = 0
-        var i = 0
-        while (i < s.length) {
-            val cw = Width.charWidth(s[i].code)
-            if (w + cw > maxWidth) break
-            w += cw
-            i++
-        }
-        return s.substring(0, i)
+        val end = Width.takePrefixByColumns(s, maxWidth)
+        return s.substring(0, end)
     }
 
 
@@ -99,15 +92,8 @@ object Layout {
 
         fun takeByWidth(s: String, maxWidth: Int): Pair<String, String> {
             if (s.isEmpty() || maxWidth <= 0) return "" to s
-            var w = 0
-            var i = 0
-            while (i < s.length) {
-                val cw = Width.charWidth(s[i].code)
-                if (w + cw > maxWidth) break
-                w += cw
-                i++
-            }
-            return s.substring(0, i) to s.substring(i)
+            val end = Width.takePrefixByColumns(s, maxWidth)
+            return s.substring(0, end) to s.substring(end)
         }
 
         for (t in tokens) {

@@ -161,15 +161,8 @@ object LayoutStyled {
 
     private fun takeByWidth(s: String, maxWidth: Int): String {
         if (s.isEmpty() || maxWidth <= 0) return ""
-        var w = 0
-        var i = 0
-        while (i < s.length) {
-            val cw = Width.charWidth(s[i].code)
-            if (w + cw > maxWidth) break
-            w += cw
-            i++
-        }
-        return s.substring(0, i)
+        val end = Width.takePrefixByColumns(s, maxWidth)
+        return s.substring(0, end)
     }
 
     private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, theme: Theme, tabWidth: Int, depth: Int = 0): List<LayoutLine> {
@@ -285,13 +278,8 @@ object LayoutStyled {
             var currentW = 0
             fun flush() { out += current.toString().trimEnd(); current = StringBuilder(); currentW = 0 }
             fun takeByWidth(s: String, maxW: Int): Pair<String, String> {
-                var i = 0; var ww = 0
-                while (i < s.length) {
-                    val cw = Width.charWidth(s[i].code)
-                    if (ww + cw > maxW) break
-                    ww += cw; i++
-                }
-                return s.substring(0, i) to s.substring(i)
+                val end = Width.takePrefixByColumns(s, maxW)
+                return s.substring(0, end) to s.substring(end)
             }
             val tokens = run {
                 val list = ArrayList<String>()

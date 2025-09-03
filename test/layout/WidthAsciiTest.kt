@@ -13,8 +13,11 @@ fun main() {
     assertEq(Width.charWidth(' '.code), 1, "space width")
     assertEq(Width.stringWidth("abc"), 3, "abc width")
     assertEq(Width.stringWidth(""), 0, "empty width")
-    // non-ASCII fallback currently 1 per code unit
-    assertEq(Width.stringWidth("你"), 1, "fallback width")
+    // non-ASCII width via wcwidth (typically 2 for CJK)
+    val w = Width.stringWidth("你")
+    if (w < 1) {
+        println("ASSERT FAIL: non-ASCII width should be >=1 (got=$w)")
+        exitProcess(1)
+    }
     println("WIDTH ASCII TEST OK")
 }
-

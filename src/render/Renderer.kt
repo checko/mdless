@@ -4,6 +4,7 @@ import ir.AnsiColor
 import ir.LayoutLine
 import ir.Style
 import ir.StyledSpan
+import layout.Width
 
 object Renderer {
     private const val ESC = "\u001B["
@@ -27,23 +28,42 @@ object Renderer {
                 val code = styleToSgr(span.style)
                 if (code.isNotEmpty()) out.append(code)
             }
+            val s = span.text
             if (maxColumns == null) {
-                out.append(span.text)
+                out.append(s)
             } else {
                 var i = 0
-                val s = span.text
                 while (i < s.length) {
-                    val ch = s[i]
-                    val cw = 1 // Width.charWidth(ch.code) — keep consistent with ASCII width for now
+                    val cp = nextCodePoint(s, i)
+                    val cw = Width.charWidth(cp.first)
                     if (!canFit(cw)) break
-                    out.append(ch)
+                    // append code point
+                    if (cp.second == i + 1) {
+                        out.append(s[i])
+                    } else {
+                        out.append(s.substring(i, cp.second))
+                    }
                     cols += cw
-                    i++
+                    i = cp.second
                 }
             }
             if (enableColor) out.append(reset())
             if (maxColumns != null && cols >= maxColumns) break
         }
+    }
+
+    private fun nextCodePoint(s: String, index: Int): Pair<Int, Int> {
+        val ch = s[index]
+        if (ch >= '\uD800' && ch <= '\uDBFF' && index + 1 < s.length) {
+            val low = s[index + 1]
+            if (low >= '\uDC00' && low <= '\uDFFF') {
+                val hiVal = ch.code - 0xD800
+                val loVal = low.code - 0xDC00
+                val cp = 0x10000 + ((hiVal shl 10) or loVal)
+                return cp to (index + 2)
+            }
+        }
+        return ch.code to (index + 1)
     }
 
     // Render with highlight ranges per line. Ranges are [start..endInclusive] in the concatenated line text.

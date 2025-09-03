@@ -58,11 +58,11 @@ run_test ThemeTest test/style/ThemeTest.kt \
 
 # Renderer
 run_test RendererTest test/render/RendererTest.kt \
-  src/render/Renderer.kt src/ir/Ir.kt
+  src/render/Renderer.kt src/layout/Width.kt src/ir/Ir.kt
 
 # Renderer highlight
 run_test RendererHighlightTest test/render/RendererHighlightTest.kt \
-  src/render/Renderer.kt src/ir/Ir.kt
+  src/render/Renderer.kt src/layout/Width.kt src/ir/Ir.kt
 
 # Styled layout integration
 run_test StyledLayoutIntegrationTest test/render/StyledLayoutIntegrationTest.kt \
