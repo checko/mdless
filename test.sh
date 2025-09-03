@@ -44,6 +44,10 @@ run_test ThemeTest test/style/ThemeTest.kt \
 run_test RendererTest test/render/RendererTest.kt \
   src/render/Renderer.kt src/ir/Ir.kt
 
+# Renderer highlight
+run_test RendererHighlightTest test/render/RendererHighlightTest.kt \
+  src/render/Renderer.kt src/ir/Ir.kt
+
 # Parser basic
 run_test ParserBasicTest test/parser/ParserBasicTest.kt \
   src/parser/Parser.kt src/ir/Ir.kt
@@ -59,5 +63,9 @@ run_test AppKeysTest test/cli/AppKeysTest.kt \
 # Search
 run_test SearchTest test/pager/SearchTest.kt \
   src/pager/Search.kt src/ir/Ir.kt
+
+# CLI theme arg parsing
+run_test ThemeArgParseTest test/cli/ThemeArgParseTest.kt \
+  src/cli/Options.kt src/style/Theme.kt src/ir/Ir.kt
 
 echo "[test] All tests passed."

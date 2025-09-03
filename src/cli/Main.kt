@@ -6,6 +6,8 @@ import cli.App
 import ir.Block
 import ir.BlockKind
 import ir.LayoutLine
+import ir.Style
+import ir.StyledSpan
 import layout.Layout
 import parser.Parser
 import pager.BlockLines
@@ -16,6 +18,7 @@ import tty.Tty
 import kotlin.system.exitProcess
 import kotlinx.cinterop.*
 import platform.posix.*
+import style.*
 
 private const val VERSION = "0.1.0-dev"
 
@@ -127,16 +130,13 @@ private fun promptLine(prefix: String): String? {
 }
 
 fun main(args: Array<String>) {
-    if (args.contains("-h") || args.contains("--help")) {
-        printHelp()
-        return
-    }
+    val (opts, positionals) = parseOptions(args)
 
     val input: String
     val interactive: Boolean
-    val hasFile = args.isNotEmpty()
+    val hasFile = positionals.isNotEmpty()
     if (hasFile) {
-        input = readAll(args[0])
+        input = readAll(positionals[0])
         interactive = Tty.isattyStdout()
     } else {
         val stdinIsTty = Tty.isattyStdin()
@@ -147,12 +147,21 @@ fun main(args: Array<String>) {
     }
 
     val blocks = Parser.parseMarkdown(input)
+    // Map block id -> kind for quick lookup
+    val kindById = HashMap<Int, BlockKind>()
+    for (b in blocks) kindById[b.id] = b.kind
     var size = Tty.getTermSize()
     var width = size.cols.coerceAtLeast(20)
     var height = (size.rows - 1).coerceAtLeast(1)
     var pair = layoutAll(blocks, width)
     var lines = pair.first
     var meta = pair.second
+    // Precompute theme
+    val theme = when (opts.themeMode) {
+        ThemeMode.Dark -> Themes.DARK
+        ThemeMode.Light -> Themes.LIGHT
+        ThemeMode.NoColor -> Themes.NOCOLOR
+    }
 
     if (!interactive) {
         // Non-interactive: render all at once, no color for now
@@ -164,6 +173,8 @@ fun main(args: Array<String>) {
     val pager = PagerState(meta, height)
     var lastQuery: String? = null
     var lastDir: Int = 1 // 1 forward, -1 backward
+    // Cached highlight matches relative to full lines
+    var highlights: List<List<IntRange>> = emptyList()
     Tty.withRawMode {
         var running = true
         while (running) {
@@ -177,14 +188,41 @@ fun main(args: Array<String>) {
                 lines = pair.first
                 meta = pair.second
                 pager.setHeight(height)
+                // Invalidate highlights on reflow
+                highlights = emptyList()
             }
             clearScreen()
             val range = pager.viewportRange()
             val slice = lines.subList(range.first, range.last + 1)
-            val out = Renderer.render(slice, enableColor = false)
+            // Apply coarse styling by block kind for interactive color
+            val styledSlice = slice.map { line ->
+                val kind = kindById[line.blockId]
+                val lineStyle = when (kind) {
+                    is BlockKind.Heading -> Style(fg = theme.heading, bold = true)
+                    is BlockKind.CodeBlock -> Style(fg = theme.code)
+                    else -> Style(fg = if (theme.mode == ThemeMode.NoColor) null else theme.text)
+                }
+                LayoutLine(
+                    spans = listOf(StyledSpan(line.spans.joinToString("") { it.text }, lineStyle)),
+                    blockId = line.blockId,
+                    rowInBlock = line.rowInBlock,
+                )
+            }
+            val enableColor = opts.themeMode != ThemeMode.NoColor
+            val out = if (lastQuery.isNullOrEmpty()) {
+                Renderer.render(styledSlice, enableColor = enableColor)
+            } else {
+                // Compute highlights if empty or query changed
+                if (highlights.isEmpty()) {
+                    highlights = Search.computeMatches(lines, lastQuery!!)
+                }
+                val hlSlice = highlights.subList(range.first, range.last + 1)
+                Renderer.renderWithHighlights(styledSlice, hlSlice, enableColor = enableColor)
+            }
             print(out)
             // status line
-            println("-- ${pager.percent()}% (q quit, / ? search) --")
+            val qHint = if (lastQuery.isNullOrEmpty()) "" else " [/${lastQuery}]"
+            println("-- ${pager.percent()}%${qHint} (q quit, / ? search) --")
 
             val b = tty.Tty.readByte()
             if (b >= 0) {
@@ -201,6 +239,7 @@ fun main(args: Array<String>) {
                             val start = pager.viewportRange().first
                             val hit = if (forward) Search.findNext(lines, q, start) else Search.findPrev(lines, q, start)
                             if (hit != null) pager.setTopLine(hit)
+                            highlights = emptyList() // recompute lazily
                         }
                     }
                     KeyCmd.SearchNext, KeyCmd.SearchPrev -> {

@@ -28,6 +28,58 @@ object Renderer {
         }
     }
 
+    // Render with highlight ranges per line. Ranges are [start..endInclusive] in the concatenated line text.
+    fun renderWithHighlights(lines: List<LayoutLine>, highlights: List<List<IntRange>>, enableColor: Boolean = true): String {
+        val sb = StringBuilder()
+        for (i in lines.indices) {
+            val line = lines[i]
+            val hls = highlights.getOrNull(i) ?: emptyList()
+            renderLineWithHighlights(line, hls, sb, enableColor)
+            sb.append('\n')
+        }
+        return sb.toString()
+    }
+
+    private fun renderLineWithHighlights(line: LayoutLine, ranges: List<IntRange>, out: Appendable, enableColor: Boolean) {
+        val text = line.spans.joinToString("") { it.text }
+        val base = line.spans.firstOrNull()?.style ?: Style()
+        if (ranges.isEmpty()) {
+            // Fallback to normal rendering of a single span with base style
+            val tmp = LayoutLine(listOf(StyledSpan(text, base)), line.blockId, line.rowInBlock)
+            renderLine(tmp, out, enableColor)
+            return
+        }
+        // Merge and clamp ranges
+        val clamped = ranges
+            .map { IntRange(it.first.coerceAtLeast(0), it.last.coerceAtMost((text.length - 1).coerceAtLeast(0))) }
+            .filter { it.first <= it.last }
+            .sortedBy { it.first }
+        var cursor = 0
+        for ((idx, r) in clamped.withIndex()) {
+            if (cursor < r.first) {
+                // non-highlight segment
+                emitSegment(text.substring(cursor, r.first), base, out, enableColor)
+            }
+            // highlight segment
+            val hlStyle = Style(fg = base.fg, bold = base.bold, underline = true)
+            emitSegment(text.substring(r.first, r.last + 1), hlStyle, out, enableColor)
+            cursor = r.last + 1
+            if (idx == clamped.lastIndex && cursor < text.length) {
+                emitSegment(text.substring(cursor), base, out, enableColor)
+            }
+        }
+    }
+
+    private fun emitSegment(s: String, style: Style, out: Appendable, enableColor: Boolean) {
+        if (s.isEmpty()) return
+        if (enableColor) {
+            val code = styleToSgr(style)
+            if (code.isNotEmpty()) out.append(code)
+        }
+        out.append(s)
+        if (enableColor) out.append(reset())
+    }
+
     private fun styleToSgr(style: Style): String {
         val codes = mutableListOf<String>()
         if (style.bold) codes.add("1")

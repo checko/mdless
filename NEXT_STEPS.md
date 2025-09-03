@@ -1,7 +1,6 @@
 # mdless — Next Options
 
-- Highlight matches: add search match ranges mapped to LayoutLine spans and render with reverse/underline; toggle highlight on/off.
-- Colored TTY rendering: integrate Styler + Renderer in interactive mode; support theme switch `--theme dark|light|no-color`.
+- Wire inline styles: integrate `Styler` into `Layout` so inline spans (emph/strong/link/code) are preserved during wrapping and shown in interactive mode.
 - Parser coverage: add lists (ordered/unordered), blockquotes with nesting, fenced code blocks with language, and basic tables.
 - Links/Images modes: implement `--links inline|footnote|hide`; footnotes with index and URL section.
 - TOC and jumps: build heading index, `--toc` flag, jump-to-section and breadcrumb in status.
@@ -13,3 +12,7 @@
 - Tests: add golden fixtures for parser and layout, renderer ANSI snapshots, and headless key-driven integration tests.
 - Packaging: small install script, `--version`, and release build flags (strip, -opt).
 
+Completed since last step
+- Colored TTY rendering in interactive mode via `--theme`.
+- Search match highlighting with underline; basic cache invalidation on reflow.
+- Tests for renderer highlights and CLI theme argument parsing.
