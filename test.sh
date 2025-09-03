@@ -48,6 +48,10 @@ run_test RendererTest test/render/RendererTest.kt \
 run_test RendererHighlightTest test/render/RendererHighlightTest.kt \
   src/render/Renderer.kt src/ir/Ir.kt
 
+# Styled layout integration
+run_test StyledLayoutIntegrationTest test/render/StyledLayoutIntegrationTest.kt \
+  src/layout/LayoutStyled.kt src/layout/Width.kt src/style/Styler.kt src/style/Theme.kt src/render/Renderer.kt src/ir/Ir.kt
+
 # Parser basic
 run_test ParserBasicTest test/parser/ParserBasicTest.kt \
   src/parser/Parser.kt src/ir/Ir.kt
