@@ -12,6 +12,7 @@ object Layout {
     fun layoutBlock(block: Block, width: Int, tabWidth: Int = 4): List<LayoutLine> {
         return when (val k = block.kind) {
             is BlockKind.Paragraph -> layoutParagraphLike(block, width, tabWidth)
+            BlockKind.Blank -> listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
             is BlockKind.Heading -> layoutParagraphLike(block, width, tabWidth)
             is BlockKind.CodeBlock -> layoutCodeBlock(block, k, width, tabWidth)
             is BlockKind.ListBlock -> layoutList(block, k, width, tabWidth)

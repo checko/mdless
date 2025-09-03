@@ -11,6 +11,7 @@ data class Block(
 sealed class BlockKind {
     data class Heading(val level: Int) : BlockKind()
     object Paragraph : BlockKind()
+    object Blank : BlockKind()
     data class ListBlock(val ordered: Boolean, val items: List<ListItem>) : BlockKind()
     data class Blockquote(val children: List<Block>) : BlockKind()
     data class CodeBlock(val language: String?, val text: String) : BlockKind()
@@ -55,4 +56,3 @@ object IdGen {
     private var nextId: Int = 1
     fun next(): Int = nextId++
 }
-

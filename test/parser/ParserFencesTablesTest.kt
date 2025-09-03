@@ -18,7 +18,8 @@ fun main() {
         | p | q |
     """.trimIndent()
 
-    val blocks = Parser.parseMarkdown(md)
+    val all = Parser.parseMarkdown(md)
+    val blocks = all.filter { it.kind !is BlockKind.Blank }
     assertTrue(blocks.size == 2, "expected code block + table")
 
     val code = blocks[0].kind as BlockKind.CodeBlock
@@ -32,4 +33,3 @@ fun main() {
 
     println("PARSER FENCES/TABLES TEST OK")
 }
-

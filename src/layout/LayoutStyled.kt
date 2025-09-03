@@ -12,6 +12,7 @@ object LayoutStyled {
     fun layoutBlock(block: Block, width: Int, theme: Theme, tabWidth: Int = 4): List<LayoutLine> {
         return when (val k = block.kind) {
             is BlockKind.Paragraph, is BlockKind.Heading -> layoutStyled(block, width, theme, tabWidth)
+            BlockKind.Blank -> listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
             is BlockKind.CodeBlock -> layoutCodeBlockStyled(block, k, width, theme, tabWidth)
             is BlockKind.ListBlock -> layoutList(block, k, width, theme, tabWidth)
             is BlockKind.Blockquote -> layoutQuote(block, k, width, theme, tabWidth)

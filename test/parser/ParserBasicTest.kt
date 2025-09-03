@@ -12,6 +12,7 @@ private fun assertTrue(cond: Boolean, msg: String) {
 private fun kindName(b: Block): String = when (val k = b.kind) {
     is BlockKind.Heading -> "Heading(${k.level})"
     is BlockKind.Paragraph -> "Paragraph"
+    is BlockKind.Blank -> "Blank"
     is BlockKind.ThematicBreak -> "HR"
     is BlockKind.CodeBlock -> "CodeBlock"
     is BlockKind.Blockquote -> "Blockquote"
@@ -41,7 +42,8 @@ fun main() {
         Another paragraph.
     """.trimIndent()
 
-    val blocks = Parser.parseMarkdown(md)
+    val blocksAll = Parser.parseMarkdown(md)
+    val blocks = blocksAll.filter { it.kind !is BlockKind.Blank }
     assertTrue(blocks.size == 4, "expected 4 blocks, got ${blocks.size}")
 
     // 1) Heading H2 with text "Title"

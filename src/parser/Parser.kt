@@ -9,8 +9,12 @@ object Parser {
         var i = 0
         while (i < lines.size) {
             val line = lines[i]
-            // Skip leading empty lines
-            if (line.isBlank()) { i++; continue }
+            // Preserve blank lines as Blank blocks
+            if (line.isBlank()) {
+                blocks += Block(IdGen.next(), BlockKind.Blank)
+                i++
+                continue
+            }
 
             // Heading: #{1,6} + space
             val headingMatch = Regex("^(#{1,6})\\s+(.*)").find(line)
@@ -45,8 +49,6 @@ object Parser {
                 // Skip closing fence if present
                 if (i < lines.size && isFenceClose(lines[i])) i++
                 blocks += Block(IdGen.next(), BlockKind.CodeBlock(lang.ifEmpty { null }, buf.toString()))
-                // skip trailing blanks
-                while (i < lines.size && lines[i].isBlank()) i++
                 continue
             }
 
@@ -73,7 +75,6 @@ object Parser {
             if (listParse != null) {
                 blocks += listParse.block
                 i = listParse.nextIndex
-                while (i < lines.size && lines[i].isBlank()) i++
                 continue
             }
 
@@ -106,8 +107,6 @@ object Parser {
                 if (idx != paraLines.lastIndex) paraInlines.add(Inline.SoftBreak)
             }
             blocks += Block(IdGen.next(), BlockKind.Paragraph, paraInlines)
-            // Skip trailing blank lines after paragraph
-            while (i < lines.size && lines[i].isBlank()) i++
         }
         return blocks
     }
