@@ -56,6 +56,14 @@ run_test StyledLayoutIntegrationTest test/render/StyledLayoutIntegrationTest.kt 
 run_test ParserBasicTest test/parser/ParserBasicTest.kt \
   src/parser/Parser.kt src/ir/Ir.kt
 
+# Parser lists and blockquotes
+run_test ParserListsQuotesTest test/parser/ParserListsQuotesTest.kt \
+  src/parser/Parser.kt src/ir/Ir.kt
+
+# Parser fenced code and tables
+run_test ParserFencesTablesTest test/parser/ParserFencesTablesTest.kt \
+  src/parser/Parser.kt src/ir/Ir.kt
+
 # Pager
 run_test PagerTest test/pager/PagerTest.kt \
   src/pager/Pager.kt
