@@ -1,6 +1,6 @@
 # mdless — Next Options
 
-- Wire inline styles: integrate `Styler` into `Layout` so inline spans (emph/strong/link/code) are preserved during wrapping and shown in interactive mode.
+- Parser coverage: add lists (ordered/unordered), blockquotes (basic), fenced code blocks with language, and basic pipe tables.
 - Parser coverage: add lists (ordered/unordered), blockquotes with nesting, fenced code blocks with language, and basic tables.
 - Links/Images modes: implement `--links inline|footnote|hide`; footnotes with index and URL section.
 - TOC and jumps: build heading index, `--toc` flag, jump-to-section and breadcrumb in status.
@@ -16,3 +16,4 @@ Completed since last step
 - Colored TTY rendering in interactive mode via `--theme`.
 - Search match highlighting with underline; basic cache invalidation on reflow.
 - Tests for renderer highlights and CLI theme argument parsing.
+- Inline styles preserved in interactive layout using `LayoutStyled`.
