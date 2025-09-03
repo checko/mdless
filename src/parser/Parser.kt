@@ -195,6 +195,7 @@ object Parser {
 
     private fun parseList(lines: List<String>, start: Int): ListParse? {
         var i = start
+        if (i >= lines.size) return null
         val first = lines[i]
         val mUn = Regex("^(\\s*)([-+*])\\s+(.+)").find(first)
         val mOr = Regex("^(\\s*)(\\d+)[.).]\\s+(.+)").find(first)
@@ -202,22 +203,63 @@ object Parser {
         val ordered = mOr != null
         val indent = (mUn?.groupValues?.get(1) ?: mOr!!.groupValues[1]).length
         val items = ArrayList<ListItem>()
-        fun parseItemText(line: String, isOrdered: Boolean): String {
+        fun isItemLine(line: String): Boolean {
+            val t = line.trimStart()
+            return if (ordered) Regex("^(\\d+)[.).]\\s+.+").containsMatchIn(t) else Regex("^([-+*])\\s+.+").containsMatchIn(t)
+        }
+        fun extractText(line: String, isOrdered: Boolean): String {
             val mt = if (isOrdered) Regex("^(\\s*)(\\d+)[.).]\\s+(.+)").find(line) else Regex("^(\\s*)([-+*])\\s+(.+)").find(line)
             return (mt?.groupValues?.get(3) ?: line).trimEnd()
         }
         while (i < lines.size) {
-            val l = lines[i]
-            if (l.isBlank()) break
-            val t = l.trimStart()
-            val curIndent = l.indexOf(t)
-            val isItem = if (ordered) Regex("^(\\d+)[.).]\\s+.+").containsMatchIn(t) else Regex("^([-+*])\\s+.+").containsMatchIn(t)
-            if (!isItem || curIndent != indent) break
-            val text = parseItemText(l, ordered)
-            val inlines = parseInlines(text)
-            val para = Block(IdGen.next(), BlockKind.Paragraph, inlines)
-            items += ListItem(listOf(para))
+            if (lines[i].isBlank()) break
+            val t = lines[i].trimStart()
+            val curIndent = lines[i].indexOf(t)
+            if (curIndent != indent || !isItemLine(lines[i])) break
+            // Start new item
+            val itemBlocks = ArrayList<Block>()
+            // First paragraph content (may grow with continuations)
+            val paraLines = ArrayList<String>()
+            paraLines += extractText(lines[i], ordered)
             i++
+            // Scan item content: nested lists or paragraph continuations
+            while (i < lines.size) {
+                val l = lines[i]
+                if (l.isBlank()) { i++; break }
+                val tt = l.trimStart()
+                val ind = l.indexOf(tt)
+                if (ind < indent) break // list ends
+                if (ind == indent && isItemLine(l)) break // next sibling item
+                if (ind > indent && isListMarker(l)) {
+                    // flush paragraph if any
+                    if (paraLines.isNotEmpty()) {
+                        val inl = ArrayList<Inline>()
+                        for ((idx2, pl) in paraLines.withIndex()) {
+                            inl.addAll(parseInlines(pl))
+                            if (idx2 != paraLines.lastIndex) inl.add(Inline.SoftBreak)
+                        }
+                        itemBlocks += Block(IdGen.next(), BlockKind.Paragraph, inl)
+                        paraLines.clear()
+                    }
+                    val nested = parseList(lines, i) ?: break
+                    itemBlocks += nested.block
+                    i = nested.nextIndex
+                    continue
+                } else {
+                    // Paragraph continuation
+                    paraLines += tt
+                    i++
+                }
+            }
+            if (paraLines.isNotEmpty()) {
+                val inl = ArrayList<Inline>()
+                for ((idx2, pl) in paraLines.withIndex()) {
+                    inl.addAll(parseInlines(pl))
+                    if (idx2 != paraLines.lastIndex) inl.add(Inline.SoftBreak)
+                }
+                itemBlocks += Block(IdGen.next(), BlockKind.Paragraph, inl)
+            }
+            items += ListItem(itemBlocks)
         }
         val blk = Block(IdGen.next(), BlockKind.ListBlock(ordered, items))
         return ListParse(blk, i)

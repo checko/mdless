@@ -72,6 +72,10 @@ run_test ParserListsQuotesTest test/parser/ParserListsQuotesTest.kt \
 run_test ParserFencesTablesTest test/parser/ParserFencesTablesTest.kt \
   src/parser/Parser.kt src/ir/Ir.kt
 
+# Parser nested lists
+run_test ParserNestedListTest test/parser/ParserNestedListTest.kt \
+  src/parser/Parser.kt src/ir/Ir.kt
+
 # Pager
 run_test PagerTest test/pager/PagerTest.kt \
   src/pager/Pager.kt
