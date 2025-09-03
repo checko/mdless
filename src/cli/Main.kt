@@ -188,6 +188,7 @@ fun main(args: Array<String>) {
     var highlights: List<List<IntRange>> = emptyList()
     Tty.withRawMode {
         var running = true
+        var dirty = true
         while (running) {
             // poll size and reflow if changed
             val ns = Tty.getTermSize()
@@ -201,25 +202,28 @@ fun main(args: Array<String>) {
                 pager.setHeight(height)
                 // Invalidate highlights on reflow
                 highlights = emptyList()
+                dirty = true
             }
-            clearScreen()
-            val range = pager.viewportRange()
-            val slice = lines.subList(range.first, range.last + 1)
-            val enableColor = opts.themeMode != ThemeMode.NoColor
-            val out = if (lastQuery.isNullOrEmpty()) {
-                Renderer.render(slice, enableColor = enableColor)
-            } else {
-                // Compute highlights if empty or query changed
-                if (highlights.isEmpty()) {
-                    highlights = Search.computeMatches(lines, lastQuery!!)
+
+            if (dirty) {
+                clearScreen()
+                val range = pager.viewportRange()
+                val slice = lines.subList(range.first, range.last + 1)
+                val enableColor = opts.themeMode != ThemeMode.NoColor
+                val out = if (lastQuery.isNullOrEmpty()) {
+                    Renderer.render(slice, enableColor = enableColor)
+                } else {
+                    if (highlights.isEmpty()) {
+                        highlights = Search.computeMatches(lines, lastQuery!!)
+                    }
+                    val hlSlice = highlights.subList(range.first, range.last + 1)
+                    Renderer.renderWithHighlights(slice, hlSlice, enableColor = enableColor)
                 }
-                val hlSlice = highlights.subList(range.first, range.last + 1)
-                Renderer.renderWithHighlights(slice, hlSlice, enableColor = enableColor)
+                print(out)
+                val qHint = if (lastQuery.isNullOrEmpty()) "" else " [/${lastQuery}]"
+                println("-- ${pager.percent()}%${qHint} (q quit, / ? search) --")
+                dirty = false
             }
-            print(out)
-            // status line
-            val qHint = if (lastQuery.isNullOrEmpty()) "" else " [/${lastQuery}]"
-            println("-- ${pager.percent()}%${qHint} (q quit, / ? search) --")
 
             val b = tty.Tty.readByte()
             if (b >= 0) {
@@ -236,7 +240,8 @@ fun main(args: Array<String>) {
                             val start = pager.viewportRange().first
                             val hit = if (forward) Search.findNext(lines, q, start) else Search.findPrev(lines, q, start)
                             if (hit != null) pager.setTopLine(hit)
-                            highlights = emptyList() // recompute lazily
+                            highlights = emptyList()
+                            dirty = true
                         }
                     }
                     KeyCmd.SearchNext, KeyCmd.SearchPrev -> {
@@ -245,11 +250,12 @@ fun main(args: Array<String>) {
                             val forward = if (cmd == KeyCmd.SearchNext) lastDir == 1 else lastDir == -1
                             val start = pager.viewportRange().first
                             val hit = if (forward) Search.findNext(lines, q, start) else Search.findPrev(lines, q, start)
-                            if (hit != null) pager.setTopLine(hit)
+                            if (hit != null) { pager.setTopLine(hit); dirty = true }
                         }
                     }
                     else -> {
-                        App.handleKey(pager, cmd)
+                        val cont = App.handleKey(pager, cmd)
+                        if (!cont) running = false else if (cmd != KeyCmd.None) dirty = true
                     }
                 }
             }
