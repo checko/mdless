@@ -15,6 +15,7 @@ object LayoutStyled {
             is BlockKind.CodeBlock -> layoutCodeBlockStyled(block, k, width, theme, tabWidth)
             is BlockKind.ListBlock -> layoutList(block, k, width, theme, tabWidth)
             is BlockKind.Blockquote -> layoutQuote(block, k, width, theme, tabWidth)
+            is BlockKind.Table -> layoutTable(block, k, width, theme, tabWidth)
             else -> emptyList()
         }
     }
@@ -221,6 +222,143 @@ object LayoutStyled {
             }
         }
         if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", prefixStyle)), block.id, 0)
+        return out
+    }
+
+    private fun layoutTable(block: Block, table: BlockKind.Table, width: Int, theme: Theme, tabWidth: Int): List<LayoutLine> {
+        val rows = table.rows
+        if (rows.isEmpty()) return listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
+        val cols = rows.maxOf { it.size }
+        if (cols == 0) return listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
+        val aligns = Array(cols) { idx -> table.aligns.getOrNull(idx) ?: ir.ColAlign.Left }
+        val padBetween = 1
+        val minCol = 1
+
+        val base = when (theme.mode) { style.ThemeMode.NoColor -> Style() else -> Style(fg = theme.text) }
+
+        val desired = IntArray(cols) { 1 }
+        for (r in rows) {
+            for (j in 0 until cols) {
+                val raw = r.getOrNull(j) ?: ""
+                val text = Tabs.expandTabs(raw, tabWidth)
+                val w = Width.stringWidth(text)
+                if (w > desired[j]) desired[j] = w
+            }
+        }
+        fun sumWithPads(arr: IntArray): Int = arr.sum() + padBetween * (cols - 1)
+        val colWidths = desired.copyOf()
+        var total = sumWithPads(colWidths)
+        val maxTotal = width
+        if (total > maxTotal) {
+            val contentTotal = colWidths.sum()
+            val targetContent = (maxTotal - padBetween * (cols - 1)).coerceAtLeast(cols * minCol)
+            if (contentTotal > 0) {
+                for (i in 0 until cols) {
+                    val prop = (colWidths[i].toDouble() / contentTotal.toDouble())
+                    colWidths[i] = kotlin.math.max(minCol, kotlin.math.floor(prop * targetContent).toInt())
+                }
+            } else {
+                for (i in 0 until cols) colWidths[i] = minCol
+            }
+            fun widestIndex(): Int = (0 until cols).maxByOrNull { colWidths[it] } ?: 0
+            total = sumWithPads(colWidths)
+            while (total > maxTotal) {
+                val idx = widestIndex()
+                if (colWidths[idx] > minCol) colWidths[idx]-- else break
+                total = sumWithPads(colWidths)
+            }
+        }
+
+        fun wrapCell(text: String, w: Int): List<String> {
+            if (w <= 0) return listOf("")
+            val out = ArrayList<String>()
+            var current = StringBuilder()
+            var currentW = 0
+            fun flush() { out += current.toString().trimEnd(); current = StringBuilder(); currentW = 0 }
+            fun takeByWidth(s: String, maxW: Int): Pair<String, String> {
+                var i = 0; var ww = 0
+                while (i < s.length) {
+                    val cw = Width.charWidth(s[i].code)
+                    if (ww + cw > maxW) break
+                    ww += cw; i++
+                }
+                return s.substring(0, i) to s.substring(i)
+            }
+            val tokens = run {
+                val list = ArrayList<String>()
+                val sb = StringBuilder()
+                fun push() { if (sb.isNotEmpty()) { list += sb.toString(); sb.clear() } }
+                for (ch in text) {
+                    when (ch) {
+                        ' ' -> push()
+                        '\n' -> { push(); list += "\n" }
+                        else -> sb.append(ch)
+                    }
+                }
+                push(); list
+            }
+            for (t in tokens) {
+                if (t == "\n") { flush(); continue }
+                val tw = Width.stringWidth(t)
+                if (tw <= w) {
+                    if (currentW == 0) { current.append(t); currentW += tw }
+                    else if (currentW + 1 + tw <= w) { if (current.lastOrNull() != ' ') current.append(' '); current.append(t); currentW = Width.stringWidth(current.toString()) }
+                    else { flush(); current.append(t); currentW = tw }
+                } else {
+                    var rest = t
+                    if (currentW > 0 && current.lastOrNull() != ' ') { if (currentW + 1 <= w) { current.append(' '); currentW += 1 } }
+                    while (rest.isNotEmpty()) {
+                        val rem = w - currentW
+                        if (rem <= 0) flush()
+                        val (chunk, tail) = takeByWidth(rest, w - currentW)
+                        if (chunk.isEmpty()) { flush(); continue }
+                        current.append(chunk); currentW += Width.stringWidth(chunk)
+                        rest = tail
+                        if (rest.isNotEmpty()) flush()
+                    }
+                }
+            }
+            if (current.isNotEmpty()) flush()
+            return out
+        }
+
+        val out = ArrayList<LayoutLine>()
+        var outRow = 0
+        for (r in rows) {
+            val wrapped: List<List<String>> = (0 until cols).map { j ->
+                wrapCell(Tabs.expandTabs(r.getOrNull(j) ?: "", tabWidth), colWidths[j])
+            }
+            val rowHeight = wrapped.maxOf { it.size }
+            for (k in 0 until rowHeight) {
+                val spans = ArrayList<StyledSpan>()
+                for (j in 0 until cols) {
+                    if (j > 0) spans += StyledSpan(" ", base)
+                    val colW = colWidths[j]
+                    val cellLine = wrapped[j].getOrNull(k) ?: ""
+                    val cellW = Width.stringWidth(cellLine)
+                    val padding = (colW - cellW).coerceAtLeast(0)
+                    when (aligns[j]) {
+                        ir.ColAlign.Left -> {
+                            spans += StyledSpan(cellLine, base)
+                            if (padding > 0) spans += StyledSpan(" ".repeat(padding), base)
+                        }
+                        ir.ColAlign.Right -> {
+                            if (padding > 0) spans += StyledSpan(" ".repeat(padding), base)
+                            spans += StyledSpan(cellLine, base)
+                        }
+                        ir.ColAlign.Center -> {
+                            val left = padding / 2
+                            val right = padding - left
+                            if (left > 0) spans += StyledSpan(" ".repeat(left), base)
+                            spans += StyledSpan(cellLine, base)
+                            if (right > 0) spans += StyledSpan(" ".repeat(right), base)
+                        }
+                    }
+                }
+                out += LayoutLine(spans, block.id, outRow++)
+            }
+        }
+        if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", base)), block.id, 0)
         return out
     }
 }

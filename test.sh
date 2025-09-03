@@ -44,6 +44,10 @@ run_test LayoutListQuoteTest test/layout/LayoutListQuoteTest.kt \
 run_test LayoutLongWordTest test/layout/LayoutLongWordTest.kt \
   src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt
 
+# Layout table
+run_test LayoutTableTest test/layout/LayoutTableTest.kt \
+  src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt
+
 # Layout nested list
 run_test LayoutNestedListTest test/layout/LayoutNestedListTest.kt \
   src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt

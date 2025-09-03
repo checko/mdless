@@ -5,6 +5,7 @@ import ir.BlockKind
 import ir.Inline
 import ir.LayoutLine
 import ir.Style
+import ir.ColAlign
 import ir.StyledSpan
 
 object Layout {
@@ -15,6 +16,7 @@ object Layout {
             is BlockKind.CodeBlock -> layoutCodeBlock(block, k, width, tabWidth)
             is BlockKind.ListBlock -> layoutList(block, k, width, tabWidth)
             is BlockKind.Blockquote -> layoutBlockquote(block, k, width, tabWidth)
+            is BlockKind.Table -> layoutTable(block, k, width, tabWidth)
             else -> emptyList() // to be implemented later for other kinds
         }
     }
@@ -226,6 +228,92 @@ object Layout {
             for (cl in childLines) {
                 val text = prefix + cl.spans.joinToString("") { it.text }
                 out += LayoutLine(listOf(StyledSpan(text, Style())), block.id, row++)
+            }
+        }
+        if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", Style())), block.id, 0)
+        return out
+    }
+
+    private fun layoutTable(block: Block, table: BlockKind.Table, width: Int, tabWidth: Int): List<LayoutLine> {
+        val rows = table.rows
+        if (rows.isEmpty()) return listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
+        val cols = rows.maxOf { it.size }
+        if (cols == 0) return listOf(LayoutLine(listOf(StyledSpan("", Style())), block.id, 0))
+        val aligns = Array(cols) { idx -> table.aligns.getOrNull(idx) ?: ColAlign.Left }
+        val padBetween = 1
+        val minCol = 1
+
+        val desired = IntArray(cols) { 1 }
+        for (r in rows) {
+            for (j in 0 until cols) {
+                val raw = r.getOrNull(j) ?: ""
+                val text = Tabs.expandTabs(raw, tabWidth)
+                val w = Width.stringWidth(text)
+                if (w > desired[j]) desired[j] = w
+            }
+        }
+
+        fun sumWithPads(arr: IntArray): Int = arr.sum() + padBetween * (cols - 1)
+
+        val colWidths = desired.copyOf()
+        var total = sumWithPads(colWidths)
+        val maxTotal = width
+        if (total > maxTotal) {
+            val contentTotal = colWidths.sum()
+            val targetContent = (maxTotal - padBetween * (cols - 1)).coerceAtLeast(cols * minCol)
+            if (contentTotal > 0) {
+                for (i in 0 until cols) {
+                    val prop = (colWidths[i].toDouble() / contentTotal.toDouble())
+                    colWidths[i] = kotlin.math.max(minCol, kotlin.math.floor(prop * targetContent).toInt())
+                }
+            } else {
+                for (i in 0 until cols) colWidths[i] = minCol
+            }
+            fun widestIndex(): Int = (0 until cols).maxByOrNull { colWidths[it] } ?: 0
+            total = sumWithPads(colWidths)
+            while (total > maxTotal) {
+                val idx = widestIndex()
+                if (colWidths[idx] > minCol) colWidths[idx]-- else break
+                total = sumWithPads(colWidths)
+            }
+        }
+
+        val out = ArrayList<LayoutLine>()
+        var outRow = 0
+        for (r in rows) {
+            val wrappedCells: List<List<String>> = (0 until cols).map { j ->
+                val raw = r.getOrNull(j) ?: ""
+                val text = Tabs.expandTabs(raw, tabWidth)
+                wrapText(text, colWidths[j])
+            }
+            val rowHeight = wrappedCells.maxOf { it.size }
+            for (k in 0 until rowHeight) {
+                val sb = StringBuilder()
+                for (j in 0 until cols) {
+                    if (j > 0) sb.append(' ')
+                    val colW = colWidths[j]
+                    val cellLine = wrappedCells[j].getOrNull(k) ?: ""
+                    val cellW = Width.stringWidth(cellLine)
+                    val padding = (colW - cellW).coerceAtLeast(0)
+                    when (aligns[j]) {
+                        ColAlign.Left -> {
+                            sb.append(cellLine)
+                            repeat(padding) { sb.append(' ') }
+                        }
+                        ColAlign.Right -> {
+                            repeat(padding) { sb.append(' ') }
+                            sb.append(cellLine)
+                        }
+                        ColAlign.Center -> {
+                            val left = padding / 2
+                            val right = padding - left
+                            repeat(left) { sb.append(' ') }
+                            sb.append(cellLine)
+                            repeat(right) { sb.append(' ') }
+                        }
+                    }
+                }
+                out += LayoutLine(listOf(StyledSpan(sb.toString(), Style())), block.id, outRow++)
             }
         }
         if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", Style())), block.id, 0)
