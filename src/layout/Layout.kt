@@ -17,6 +17,7 @@ object Layout {
         }
     }
 
+
     private fun layoutParagraphLike(block: Block, width: Int): List<LayoutLine> {
         val text = flattenText(block.inlines)
         val wrapped = wrapText(text, width)
@@ -38,6 +39,7 @@ object Layout {
         }
         return out
     }
+
 
     private fun flattenText(inlines: List<Inline>): String {
         val sb = StringBuilder()
@@ -117,5 +119,5 @@ object Layout {
         pushToken()
         return out
     }
-}
 
+}

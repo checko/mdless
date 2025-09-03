@@ -9,6 +9,7 @@ import ir.LayoutLine
 import ir.Style
 import ir.StyledSpan
 import layout.Layout
+import layout.LayoutStyled
 import parser.Parser
 import pager.BlockLines
 import pager.PagerState
@@ -91,6 +92,17 @@ private fun layoutAll(blocks: List<Block>, width: Int): Pair<List<LayoutLine>, L
     return all to meta
 }
 
+private fun layoutAllStyled(blocks: List<Block>, width: Int, theme: style.Theme): Pair<List<LayoutLine>, List<BlockLines>> {
+    val all = ArrayList<LayoutLine>()
+    val meta = ArrayList<BlockLines>()
+    for (b in blocks) {
+        val lines = LayoutStyled.layoutBlock(b, width, theme)
+        all.addAll(lines)
+        meta.add(BlockLines(b.id, lines.size))
+    }
+    return all to meta
+}
+
 private fun clearScreen() {
     print("\u001B[2J\u001B[H")
 }
@@ -153,15 +165,14 @@ fun main(args: Array<String>) {
     var size = Tty.getTermSize()
     var width = size.cols.coerceAtLeast(20)
     var height = (size.rows - 1).coerceAtLeast(1)
-    var pair = layoutAll(blocks, width)
-    var lines = pair.first
-    var meta = pair.second
-    // Precompute theme
     val theme = when (opts.themeMode) {
         ThemeMode.Dark -> Themes.DARK
         ThemeMode.Light -> Themes.LIGHT
         ThemeMode.NoColor -> Themes.NOCOLOR
     }
+    var pair = if (interactive) layoutAllStyled(blocks, width, theme) else layoutAll(blocks, width)
+    var lines = pair.first
+    var meta = pair.second
 
     if (!interactive) {
         // Non-interactive: render all at once, no color for now
@@ -184,7 +195,7 @@ fun main(args: Array<String>) {
                 size = ns
                 width = size.cols.coerceAtLeast(20)
                 height = (size.rows - 1).coerceAtLeast(1)
-                pair = layoutAll(blocks, width)
+                pair = if (interactive) layoutAllStyled(blocks, width, theme) else layoutAll(blocks, width)
                 lines = pair.first
                 meta = pair.second
                 pager.setHeight(height)
@@ -194,30 +205,16 @@ fun main(args: Array<String>) {
             clearScreen()
             val range = pager.viewportRange()
             val slice = lines.subList(range.first, range.last + 1)
-            // Apply coarse styling by block kind for interactive color
-            val styledSlice = slice.map { line ->
-                val kind = kindById[line.blockId]
-                val lineStyle = when (kind) {
-                    is BlockKind.Heading -> Style(fg = theme.heading, bold = true)
-                    is BlockKind.CodeBlock -> Style(fg = theme.code)
-                    else -> Style(fg = if (theme.mode == ThemeMode.NoColor) null else theme.text)
-                }
-                LayoutLine(
-                    spans = listOf(StyledSpan(line.spans.joinToString("") { it.text }, lineStyle)),
-                    blockId = line.blockId,
-                    rowInBlock = line.rowInBlock,
-                )
-            }
             val enableColor = opts.themeMode != ThemeMode.NoColor
             val out = if (lastQuery.isNullOrEmpty()) {
-                Renderer.render(styledSlice, enableColor = enableColor)
+                Renderer.render(slice, enableColor = enableColor)
             } else {
                 // Compute highlights if empty or query changed
                 if (highlights.isEmpty()) {
                     highlights = Search.computeMatches(lines, lastQuery!!)
                 }
                 val hlSlice = highlights.subList(range.first, range.last + 1)
-                Renderer.renderWithHighlights(styledSlice, hlSlice, enableColor = enableColor)
+                Renderer.renderWithHighlights(slice, hlSlice, enableColor = enableColor)
             }
             print(out)
             // status line
