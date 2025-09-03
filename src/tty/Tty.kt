@@ -55,12 +55,28 @@ object Tty {
     data class TermSize(val rows: Int, val cols: Int)
 
     fun getTermSize(fd: Int = STDOUT_FILENO): TermSize {
-        memScoped {
+        fun query(fd: Int): TermSize? = memScoped {
             val ws = alloc<winsize>()
             if (ioctl(fd, TIOCGWINSZ.toULong(), ws.ptr) == 0) {
-                return TermSize(ws.ws_row.toInt(), ws.ws_col.toInt())
+                TermSize(ws.ws_row.toInt(), ws.ws_col.toInt())
+            } else null
+        }
+        // Try stdout, then stdin, then /dev/tty, then env, else fallback
+        query(fd)?.let { return it }
+        query(STDIN_FILENO)?.let { return it }
+        memScoped {
+            val dev = fopen("/dev/tty", "r")
+            if (dev != null) {
+                val ttyFd = fileno(dev)
+                val ts = query(ttyFd)
+                fclose(dev)
+                if (ts != null) return ts
             }
         }
+        // Env vars COLUMNS and LINES
+        val colsEnv = getenv("COLUMNS")?.toKString()?.toIntOrNull()
+        val rowsEnv = getenv("LINES")?.toKString()?.toIntOrNull()
+        if (colsEnv != null && rowsEnv != null) return TermSize(rowsEnv, colsEnv)
         return TermSize(24, 80)
     }
 }

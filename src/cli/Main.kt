@@ -163,7 +163,7 @@ fun main(args: Array<String>) {
     val kindById = HashMap<Int, BlockKind>()
     for (b in blocks) kindById[b.id] = b.kind
     var size = Tty.getTermSize()
-    var width = size.cols.coerceAtLeast(20)
+    var width = (opts.width ?: size.cols).coerceAtLeast(20)
     var height = (size.rows - 1).coerceAtLeast(1)
     val theme = when (opts.themeMode) {
         ThemeMode.Dark -> Themes.DARK
@@ -194,7 +194,7 @@ fun main(args: Array<String>) {
             val ns = Tty.getTermSize()
             if (ns.cols != width || ns.rows != height + 1) {
                 size = ns
-                width = size.cols.coerceAtLeast(20)
+                width = (opts.width ?: size.cols).coerceAtLeast(20)
                 height = (size.rows - 1).coerceAtLeast(1)
                 pair = if (interactive) layoutAllStyled(blocks, width, theme) else layoutAll(blocks, width)
                 lines = pair.first
@@ -211,17 +211,18 @@ fun main(args: Array<String>) {
                 val slice = lines.subList(range.first, range.last + 1)
                 val enableColor = opts.themeMode != ThemeMode.NoColor
                 val out = if (lastQuery.isNullOrEmpty()) {
-                    Renderer.render(slice, enableColor = enableColor)
+                    Renderer.render(slice, enableColor = enableColor, clearEol = true, maxColumns = width, crlf = true)
                 } else {
                     if (highlights.isEmpty()) {
                         highlights = Search.computeMatches(lines, lastQuery!!)
                     }
                     val hlSlice = highlights.subList(range.first, range.last + 1)
-                    Renderer.renderWithHighlights(slice, hlSlice, enableColor = enableColor)
+                    Renderer.renderWithHighlights(slice, hlSlice, enableColor = enableColor, clearEol = true, maxColumns = width, crlf = true)
                 }
                 print(out)
                 val qHint = if (lastQuery.isNullOrEmpty()) "" else " [/${lastQuery}]"
-                println("-- ${pager.percent()}%${qHint} (q quit, / ? search) --")
+                // Clear to end of line for status as well, and CRLF for raw mode
+                print("-- ${pager.percent()}%${qHint} (q quit, / ? search) --\u001B[K\r\n")
                 dirty = false
             }
 

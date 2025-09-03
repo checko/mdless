@@ -10,18 +10,17 @@ import ir.StyledSpan
 object Layout {
     fun layoutBlock(block: Block, width: Int, tabWidth: Int = 4): List<LayoutLine> {
         return when (val k = block.kind) {
-            is BlockKind.Paragraph -> layoutParagraphLike(block, width)
-            is BlockKind.Heading -> layoutParagraphLike(block, width)
-            is BlockKind.CodeBlock -> layoutCodeBlock(block, k, width)
-            is BlockKind.ListBlock -> layoutList(block, k, width)
-            is BlockKind.Blockquote -> layoutBlockquote(block, k, width)
+            is BlockKind.Paragraph -> layoutParagraphLike(block, width, tabWidth)
+            is BlockKind.Heading -> layoutParagraphLike(block, width, tabWidth)
+            is BlockKind.CodeBlock -> layoutCodeBlock(block, k, width, tabWidth)
+            is BlockKind.ListBlock -> layoutList(block, k, width, tabWidth)
+            is BlockKind.Blockquote -> layoutBlockquote(block, k, width, tabWidth)
             else -> emptyList() // to be implemented later for other kinds
         }
     }
 
-
-    private fun layoutParagraphLike(block: Block, width: Int): List<LayoutLine> {
-        val text = flattenText(block.inlines)
+    private fun layoutParagraphLike(block: Block, width: Int, tabWidth: Int): List<LayoutLine> {
+        val text = Tabs.expandTabs(flattenText(block.inlines), tabWidth)
         val wrapped = wrapText(text, width)
         val lines = ArrayList<LayoutLine>(wrapped.size)
         var row = 0
@@ -31,11 +30,11 @@ object Layout {
         return lines
     }
 
-    private fun layoutCodeBlock(block: Block, code: BlockKind.CodeBlock, width: Int): List<LayoutLine> {
+    private fun layoutCodeBlock(block: Block, code: BlockKind.CodeBlock, width: Int, tabWidth: Int): List<LayoutLine> {
         val out = ArrayList<LayoutLine>()
         var row = 0
         for (ln in code.text.split("\n")) {
-            var rest = ln
+            var rest = Tabs.expandTabs(ln, tabWidth)
             while (rest.isNotEmpty()) {
                 val take = takeByWidthRaw(rest, width)
                 out += LayoutLine(listOf(StyledSpan(take, Style())), block.id, row++)
@@ -183,7 +182,7 @@ object Layout {
         return out
     }
 
-    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, depth: Int = 0): List<LayoutLine> {
+    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, tabWidth: Int, depth: Int = 0): List<LayoutLine> {
         val out = ArrayList<LayoutLine>()
         var row = 0
         val levelIndent = "  ".repeat(depth)
@@ -194,7 +193,7 @@ object Layout {
             for (child in item.blocks) {
                 when (val k = child.kind) {
                     is BlockKind.ListBlock -> {
-                        val nested = layoutList(child, k, width, depth + 1)
+                        val nested = layoutList(child, k, width, tabWidth, depth + 1)
                         for (cl in nested) {
                             out += LayoutLine(cl.spans, block.id, row++)
                         }
@@ -202,7 +201,7 @@ object Layout {
                     }
                     else -> {
                         val innerWidth = (width - levelIndent.length - bullet.length).coerceAtLeast(1)
-                        val childLines = layoutBlock(child, innerWidth)
+                        val childLines = layoutBlock(child, innerWidth, tabWidth)
                         for ((j, cl) in childLines.withIndex()) {
                             val pref = if (firstInItem && j == 0) levelIndent + bullet else levelIndent + contIndent
                             val text = pref + cl.spans.joinToString("") { it.text }
@@ -217,13 +216,13 @@ object Layout {
         return out
     }
 
-    private fun layoutBlockquote(block: Block, quote: BlockKind.Blockquote, width: Int): List<LayoutLine> {
+    private fun layoutBlockquote(block: Block, quote: BlockKind.Blockquote, width: Int, tabWidth: Int): List<LayoutLine> {
         val out = ArrayList<LayoutLine>()
         var row = 0
         val prefix = "> "
         val innerWidth = (width - prefix.length).coerceAtLeast(1)
         for (child in quote.children) {
-            val childLines = layoutBlock(child, innerWidth)
+            val childLines = layoutBlock(child, innerWidth, tabWidth)
             for (cl in childLines) {
                 val text = prefix + cl.spans.joinToString("") { it.text }
                 out += LayoutLine(listOf(StyledSpan(text, Style())), block.id, row++)

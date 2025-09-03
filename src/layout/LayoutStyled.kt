@@ -11,20 +11,20 @@ import style.Theme
 object LayoutStyled {
     fun layoutBlock(block: Block, width: Int, theme: Theme, tabWidth: Int = 4): List<LayoutLine> {
         return when (val k = block.kind) {
-            is BlockKind.Paragraph, is BlockKind.Heading -> layoutStyled(block, width, theme)
-            is BlockKind.CodeBlock -> layoutCodeBlockStyled(block, k, width, theme)
-            is BlockKind.ListBlock -> layoutList(block, k, width, theme)
-            is BlockKind.Blockquote -> layoutQuote(block, k, width, theme)
+            is BlockKind.Paragraph, is BlockKind.Heading -> layoutStyled(block, width, theme, tabWidth)
+            is BlockKind.CodeBlock -> layoutCodeBlockStyled(block, k, width, theme, tabWidth)
+            is BlockKind.ListBlock -> layoutList(block, k, width, theme, tabWidth)
+            is BlockKind.Blockquote -> layoutQuote(block, k, width, theme, tabWidth)
             else -> emptyList()
         }
     }
 
-    private fun layoutCodeBlockStyled(block: Block, code: BlockKind.CodeBlock, width: Int, theme: Theme): List<LayoutLine> {
+    private fun layoutCodeBlockStyled(block: Block, code: BlockKind.CodeBlock, width: Int, theme: Theme, tabWidth: Int): List<LayoutLine> {
         val style = Styler.styleBlock(block, theme).firstOrNull()?.style ?: Style()
         val out = ArrayList<LayoutLine>()
         var row = 0
         for (ln in code.text.split('\n')) {
-            var rest = ln
+            var rest = Tabs.expandTabs(ln, tabWidth)
             while (rest.isNotEmpty()) {
                 val take = takeByWidth(rest, width)
                 out += LayoutLine(listOf(StyledSpan(take, style)), block.id, row++)
@@ -38,8 +38,12 @@ object LayoutStyled {
 
     private data class Tok(val text: String, val style: Style, val isNewline: Boolean)
 
-    private fun layoutStyled(block: Block, width: Int, theme: Theme): List<LayoutLine> {
-        val styled = Styler.styleBlock(block, theme)
+    private fun layoutStyled(block: Block, width: Int, theme: Theme, tabWidth: Int): List<LayoutLine> {
+        // Expand tabs in each styled span before tokenization
+        val styled = Styler.styleBlock(block, theme).map { sp ->
+            val t = Tabs.expandTabs(sp.text, tabWidth)
+            StyledSpan(t, sp.style)
+        }
         val toks = toTokens(styled)
         val lines = ArrayList<LayoutLine>()
         var current = ArrayList<StyledSpan>()
@@ -70,20 +74,47 @@ object LayoutStyled {
                 continue
             }
             val tw = Width.stringWidth(t.text)
-            if (currentW == 0) {
-                appendSpan(t.text, t.style)
-                currentW += tw
-            } else if (currentW + 1 + tw <= width) {
-                // add a single space between tokens if last char isn't space
+            if (tw <= width) {
+                if (currentW == 0) {
+                    appendSpan(t.text, t.style)
+                    currentW += tw
+                } else if (currentW + 1 + tw <= width) {
+                    val prevStyle = current.lastOrNull()?.style ?: t.style
+                    val lastText = current.lastOrNull()?.text
+                    if (lastText != null && lastText.lastOrNull() != ' ') appendSpan(" ", prevStyle)
+                    appendSpan(t.text, t.style)
+                    currentW = Width.stringWidth(current.joinToString("") { it.text })
+                } else {
+                    flush(row++)
+                    appendSpan(t.text, t.style)
+                    currentW = tw
+                }
+            } else {
+                var rest = t.text
+                // place a space before breaking if needed
                 val prevStyle = current.lastOrNull()?.style ?: t.style
                 val lastText = current.lastOrNull()?.text
-                if (lastText != null && lastText.lastOrNull() != ' ') appendSpan(" ", prevStyle)
-                appendSpan(t.text, t.style)
-                currentW = Width.stringWidth(current.joinToString("") { it.text })
-            } else {
-                flush(row++)
-                appendSpan(t.text, t.style)
-                currentW = tw
+                if (currentW > 0 && lastText != null && lastText.lastOrNull() != ' ') {
+                    if (currentW + 1 <= width) {
+                        appendSpan(" ", prevStyle)
+                        currentW += 1
+                    }
+                }
+                while (rest.isNotEmpty()) {
+                    val remaining = width - currentW
+                    if (remaining <= 0) {
+                        flush(row++)
+                    }
+                    val chunk = takeByWidth(rest, width - currentW)
+                    if (chunk.isEmpty()) {
+                        flush(row++)
+                        continue
+                    }
+                    appendSpan(chunk, t.style)
+                    currentW += Width.stringWidth(chunk)
+                    rest = rest.drop(chunk.length)
+                    if (rest.isNotEmpty()) flush(row++)
+                }
             }
         }
         if (current.isNotEmpty()) flush(row++)
@@ -138,7 +169,7 @@ object LayoutStyled {
         return s.substring(0, i)
     }
 
-    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, theme: Theme, depth: Int = 0): List<LayoutLine> {
+    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, theme: Theme, tabWidth: Int, depth: Int = 0): List<LayoutLine> {
         val out = ArrayList<LayoutLine>()
         var row = 0
         val baseStyle = when (theme.mode) { style.ThemeMode.NoColor -> Style() else -> Style(fg = theme.text) }
@@ -151,13 +182,13 @@ object LayoutStyled {
             for (child in item.blocks) {
                 when (val k = child.kind) {
                     is BlockKind.ListBlock -> {
-                        val nested = layoutList(child, k, width, theme, depth + 1)
+                        val nested = layoutList(child, k, width, theme, tabWidth, depth + 1)
                         for (cl in nested) out += LayoutLine(cl.spans, block.id, row++)
                         firstInItem = false
                     }
                     else -> {
                         val innerWidth = (width - levelIndent.length - bulletText.length).coerceAtLeast(1)
-                        val childLines = layoutBlock(child, innerWidth, theme)
+                        val childLines = layoutBlock(child, innerWidth, theme, tabWidth)
                         for ((j, cl) in childLines.withIndex()) {
                             val prefText = if (firstInItem && j == 0) levelIndent + bulletText else levelIndent + indentText
                             val spans = ArrayList<StyledSpan>()
@@ -174,14 +205,14 @@ object LayoutStyled {
         return out
     }
 
-    private fun layoutQuote(block: Block, quote: BlockKind.Blockquote, width: Int, theme: Theme): List<LayoutLine> {
+    private fun layoutQuote(block: Block, quote: BlockKind.Blockquote, width: Int, theme: Theme, tabWidth: Int): List<LayoutLine> {
         val out = ArrayList<LayoutLine>()
         var row = 0
         val prefixText = "> "
         val prefixStyle = when (theme.mode) { style.ThemeMode.NoColor -> Style() else -> Style(fg = theme.quote) }
         val innerW = (width - prefixText.length).coerceAtLeast(1)
         for (child in quote.children) {
-            val childLines = layoutBlock(child, innerW, theme)
+            val childLines = layoutBlock(child, innerW, theme, tabWidth)
             for (cl in childLines) {
                 val spans = ArrayList<StyledSpan>()
                 spans += StyledSpan(prefixText, prefixStyle)

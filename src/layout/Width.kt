@@ -4,7 +4,7 @@ object Width {
     fun charWidth(c: Int): Int {
         return when (c) {
             in 0..31 -> 0 // control; treat as zero width (we don't expect them in content)
-            9 -> 1 // tab handled at layout stage later; placeholder width
+            9 -> 1 // tab will be expanded before width calc
             in 32..126 -> 1 // printable ASCII
             else -> 1 // fallback for now (non-ASCII)
         }
@@ -19,3 +19,21 @@ object Width {
     }
 }
 
+object Tabs {
+    fun expandTabs(s: String, tabWidth: Int): String {
+        if (tabWidth <= 0) return s
+        val out = StringBuilder(s.length)
+        var col = 0
+        for (ch in s) {
+            if (ch == '\t') {
+                val spaces = tabWidth - (col % tabWidth)
+                repeat(spaces) { out.append(' ') }
+                col += spaces
+            } else {
+                out.append(ch)
+                if (ch == '\n') col = 0 else col += Width.charWidth(ch.code)
+            }
+        }
+        return out.toString()
+    }
+}

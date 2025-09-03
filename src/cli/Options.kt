@@ -2,10 +2,12 @@ import style.ThemeMode
 
 data class Options(
     val themeMode: ThemeMode = ThemeMode.Dark,
+    val width: Int? = null,
 )
 
 internal fun parseOptions(argv: Array<String>): Pair<Options, List<String>> {
     var mode: ThemeMode = ThemeMode.Dark
+    var width: Int? = null
     val rest = ArrayList<String>()
     var i = 0
     while (i < argv.size) {
@@ -31,6 +33,13 @@ internal fun parseOptions(argv: Array<String>): Pair<Options, List<String>> {
                     continue
                 }
             }
+            "--width" -> {
+                val v = argv.getOrNull(i + 1)
+                width = v?.toIntOrNull()
+                if (width == null) println("--width requires an integer value")
+                i += if (v != null) 2 else 1
+                continue
+            }
             "-h", "--help" -> {
                 // Help is handled in main; we pass it through as positional to allow tests
                 rest += a
@@ -42,6 +51,5 @@ internal fun parseOptions(argv: Array<String>): Pair<Options, List<String>> {
             }
         }
     }
-    return Options(themeMode = mode) to rest
+    return Options(themeMode = mode, width = width) to rest
 }
-
