@@ -13,6 +13,8 @@ object LayoutStyled {
         return when (val k = block.kind) {
             is BlockKind.Paragraph, is BlockKind.Heading -> layoutStyled(block, width, theme)
             is BlockKind.CodeBlock -> layoutCodeBlockStyled(block, k, width, theme)
+            is BlockKind.ListBlock -> layoutList(block, k, width, theme)
+            is BlockKind.Blockquote -> layoutQuote(block, k, width, theme)
             else -> emptyList()
         }
     }
@@ -116,5 +118,48 @@ object LayoutStyled {
         }
         return out
     }
-}
 
+    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, theme: Theme): List<LayoutLine> {
+        val out = ArrayList<LayoutLine>()
+        var row = 0
+        val baseStyle = when (theme.mode) { style.ThemeMode.NoColor -> Style() else -> Style(fg = theme.text) }
+        for ((idx, item) in list.items.withIndex()) {
+            val bulletText = if (list.ordered) "${idx + 1}. " else "- "
+            val bulletStyle = baseStyle
+            val indentText = " ".repeat(bulletText.length)
+            var firstInItem = true
+            for (child in item.blocks) {
+                val childLines = layoutBlock(child, (width - bulletText.length).coerceAtLeast(1), theme)
+                for ((j, cl) in childLines.withIndex()) {
+                    val prefText = if (firstInItem && j == 0) bulletText else indentText
+                    val spans = ArrayList<StyledSpan>()
+                    if (prefText.isNotEmpty()) spans += StyledSpan(prefText, bulletStyle)
+                    spans.addAll(cl.spans)
+                    out += LayoutLine(spans, block.id, row++)
+                }
+                firstInItem = false
+            }
+        }
+        if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", baseStyle)), block.id, 0)
+        return out
+    }
+
+    private fun layoutQuote(block: Block, quote: BlockKind.Blockquote, width: Int, theme: Theme): List<LayoutLine> {
+        val out = ArrayList<LayoutLine>()
+        var row = 0
+        val prefixText = "> "
+        val prefixStyle = when (theme.mode) { style.ThemeMode.NoColor -> Style() else -> Style(fg = theme.quote) }
+        val innerW = (width - prefixText.length).coerceAtLeast(1)
+        for (child in quote.children) {
+            val childLines = layoutBlock(child, innerW, theme)
+            for (cl in childLines) {
+                val spans = ArrayList<StyledSpan>()
+                spans += StyledSpan(prefixText, prefixStyle)
+                spans.addAll(cl.spans)
+                out += LayoutLine(spans, block.id, row++)
+            }
+        }
+        if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", prefixStyle)), block.id, 0)
+        return out
+    }
+}

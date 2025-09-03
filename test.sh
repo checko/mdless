@@ -36,6 +36,10 @@ run_test WidthAsciiTest test/layout/WidthAsciiTest.kt src/layout/Width.kt
 run_test LayoutParaTest test/layout/LayoutParaTest.kt \
   src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt
 
+# Layout list/blockquote
+run_test LayoutListQuoteTest test/layout/LayoutListQuoteTest.kt \
+  src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt
+
 # Theme & Styler
 run_test ThemeTest test/style/ThemeTest.kt \
   src/style/Theme.kt src/style/Styler.kt src/ir/Ir.kt

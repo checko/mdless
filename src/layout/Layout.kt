@@ -13,6 +13,8 @@ object Layout {
             is BlockKind.Paragraph -> layoutParagraphLike(block, width)
             is BlockKind.Heading -> layoutParagraphLike(block, width)
             is BlockKind.CodeBlock -> layoutCodeBlock(block, k, width)
+            is BlockKind.ListBlock -> layoutList(block, k, width)
+            is BlockKind.Blockquote -> layoutBlockquote(block, k, width)
             else -> emptyList() // to be implemented later for other kinds
         }
     }
@@ -117,6 +119,43 @@ object Layout {
             }
         }
         pushToken()
+        return out
+    }
+
+    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int): List<LayoutLine> {
+        val out = ArrayList<LayoutLine>()
+        var row = 0
+        for ((idx, item) in list.items.withIndex()) {
+            val bullet = if (list.ordered) "${idx + 1}. " else "- "
+            val indent = " ".repeat(bullet.length)
+            var firstInItem = true
+            for (child in item.blocks) {
+                val childLines = layoutBlock(child, (width - bullet.length).coerceAtLeast(1))
+                for ((j, cl) in childLines.withIndex()) {
+                    val pref = if (firstInItem && j == 0) bullet else indent
+                    val text = pref + cl.spans.joinToString("") { it.text }
+                    out += LayoutLine(listOf(StyledSpan(text, Style())), block.id, row++)
+                }
+                firstInItem = false
+            }
+        }
+        if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", Style())), block.id, 0)
+        return out
+    }
+
+    private fun layoutBlockquote(block: Block, quote: BlockKind.Blockquote, width: Int): List<LayoutLine> {
+        val out = ArrayList<LayoutLine>()
+        var row = 0
+        val prefix = "> "
+        val innerWidth = (width - prefix.length).coerceAtLeast(1)
+        for (child in quote.children) {
+            val childLines = layoutBlock(child, innerWidth)
+            for (cl in childLines) {
+                val text = prefix + cl.spans.joinToString("") { it.text }
+                out += LayoutLine(listOf(StyledSpan(text, Style())), block.id, row++)
+            }
+        }
+        if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", Style())), block.id, 0)
         return out
     }
 
