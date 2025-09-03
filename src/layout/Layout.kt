@@ -122,21 +122,34 @@ object Layout {
         return out
     }
 
-    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int): List<LayoutLine> {
+    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, depth: Int = 0): List<LayoutLine> {
         val out = ArrayList<LayoutLine>()
         var row = 0
+        val levelIndent = "  ".repeat(depth)
         for ((idx, item) in list.items.withIndex()) {
             val bullet = if (list.ordered) "${idx + 1}. " else "- "
-            val indent = " ".repeat(bullet.length)
+            val contIndent = " ".repeat(bullet.length)
             var firstInItem = true
             for (child in item.blocks) {
-                val childLines = layoutBlock(child, (width - bullet.length).coerceAtLeast(1))
-                for ((j, cl) in childLines.withIndex()) {
-                    val pref = if (firstInItem && j == 0) bullet else indent
-                    val text = pref + cl.spans.joinToString("") { it.text }
-                    out += LayoutLine(listOf(StyledSpan(text, Style())), block.id, row++)
+                when (val k = child.kind) {
+                    is BlockKind.ListBlock -> {
+                        val nested = layoutList(child, k, width, depth + 1)
+                        for (cl in nested) {
+                            out += LayoutLine(cl.spans, block.id, row++)
+                        }
+                        firstInItem = false
+                    }
+                    else -> {
+                        val innerWidth = (width - levelIndent.length - bullet.length).coerceAtLeast(1)
+                        val childLines = layoutBlock(child, innerWidth)
+                        for ((j, cl) in childLines.withIndex()) {
+                            val pref = if (firstInItem && j == 0) levelIndent + bullet else levelIndent + contIndent
+                            val text = pref + cl.spans.joinToString("") { it.text }
+                            out += LayoutLine(listOf(StyledSpan(text, Style())), block.id, row++)
+                        }
+                        firstInItem = false
+                    }
                 }
-                firstInItem = false
             }
         }
         if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", Style())), block.id, 0)

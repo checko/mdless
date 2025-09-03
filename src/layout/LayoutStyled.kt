@@ -119,25 +119,36 @@ object LayoutStyled {
         return out
     }
 
-    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, theme: Theme): List<LayoutLine> {
+    private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, theme: Theme, depth: Int = 0): List<LayoutLine> {
         val out = ArrayList<LayoutLine>()
         var row = 0
         val baseStyle = when (theme.mode) { style.ThemeMode.NoColor -> Style() else -> Style(fg = theme.text) }
+        val levelIndent = "  ".repeat(depth)
         for ((idx, item) in list.items.withIndex()) {
             val bulletText = if (list.ordered) "${idx + 1}. " else "- "
             val bulletStyle = baseStyle
             val indentText = " ".repeat(bulletText.length)
             var firstInItem = true
             for (child in item.blocks) {
-                val childLines = layoutBlock(child, (width - bulletText.length).coerceAtLeast(1), theme)
-                for ((j, cl) in childLines.withIndex()) {
-                    val prefText = if (firstInItem && j == 0) bulletText else indentText
-                    val spans = ArrayList<StyledSpan>()
-                    if (prefText.isNotEmpty()) spans += StyledSpan(prefText, bulletStyle)
-                    spans.addAll(cl.spans)
-                    out += LayoutLine(spans, block.id, row++)
+                when (val k = child.kind) {
+                    is BlockKind.ListBlock -> {
+                        val nested = layoutList(child, k, width, theme, depth + 1)
+                        for (cl in nested) out += LayoutLine(cl.spans, block.id, row++)
+                        firstInItem = false
+                    }
+                    else -> {
+                        val innerWidth = (width - levelIndent.length - bulletText.length).coerceAtLeast(1)
+                        val childLines = layoutBlock(child, innerWidth, theme)
+                        for ((j, cl) in childLines.withIndex()) {
+                            val prefText = if (firstInItem && j == 0) levelIndent + bulletText else levelIndent + indentText
+                            val spans = ArrayList<StyledSpan>()
+                            if (prefText.isNotEmpty()) spans += StyledSpan(prefText, bulletStyle)
+                            spans.addAll(cl.spans)
+                            out += LayoutLine(spans, block.id, row++)
+                        }
+                        firstInItem = false
+                    }
                 }
-                firstInItem = false
             }
         }
         if (out.isEmpty()) out += LayoutLine(listOf(StyledSpan("", baseStyle)), block.id, 0)
