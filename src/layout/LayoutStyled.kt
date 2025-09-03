@@ -21,11 +21,17 @@ object LayoutStyled {
 
     private fun layoutCodeBlockStyled(block: Block, code: BlockKind.CodeBlock, width: Int, theme: Theme): List<LayoutLine> {
         val style = Styler.styleBlock(block, theme).firstOrNull()?.style ?: Style()
-        val lines = code.text.split('\n')
-        val out = ArrayList<LayoutLine>(lines.size)
+        val out = ArrayList<LayoutLine>()
         var row = 0
-        for (ln in lines) {
-            out += LayoutLine(listOf(StyledSpan(ln, style)), block.id, row++)
+        for (ln in code.text.split('\n')) {
+            var rest = ln
+            while (rest.isNotEmpty()) {
+                val take = takeByWidth(rest, width)
+                out += LayoutLine(listOf(StyledSpan(take, style)), block.id, row++)
+                rest = rest.drop(take.length)
+                if (take.isEmpty()) break
+            }
+            if (ln.isEmpty()) out += LayoutLine(listOf(StyledSpan("", style)), block.id, row++)
         }
         return out
     }
@@ -117,6 +123,19 @@ object LayoutStyled {
             }
         }
         return out
+    }
+
+    private fun takeByWidth(s: String, maxWidth: Int): String {
+        if (s.isEmpty() || maxWidth <= 0) return ""
+        var w = 0
+        var i = 0
+        while (i < s.length) {
+            val cw = Width.charWidth(s[i].code)
+            if (w + cw > maxWidth) break
+            w += cw
+            i++
+        }
+        return s.substring(0, i)
     }
 
     private fun layoutList(block: Block, list: BlockKind.ListBlock, width: Int, theme: Theme, depth: Int = 0): List<LayoutLine> {

@@ -32,14 +32,36 @@ object Layout {
     }
 
     private fun layoutCodeBlock(block: Block, code: BlockKind.CodeBlock, width: Int): List<LayoutLine> {
-        val lines = code.text.split("\n")
-        val out = ArrayList<LayoutLine>(lines.size)
+        val out = ArrayList<LayoutLine>()
         var row = 0
-        for (ln in lines) {
-            // No wrapping for code in this minimal version; truncate visually if needed
-            out += LayoutLine(listOf(StyledSpan(ln, Style())), block.id, row++)
+        for (ln in code.text.split("\n")) {
+            var rest = ln
+            while (rest.isNotEmpty()) {
+                val take = takeByWidthRaw(rest, width)
+                out += LayoutLine(listOf(StyledSpan(take, Style())), block.id, row++)
+                rest = rest.drop(take.length)
+                if (take.isEmpty()) break else if (rest.isNotEmpty()) {
+                    // continue wrapping
+                }
+            }
+            if (ln.isEmpty()) {
+                out += LayoutLine(listOf(StyledSpan("", Style())), block.id, row++)
+            }
         }
         return out
+    }
+
+    private fun takeByWidthRaw(s: String, maxWidth: Int): String {
+        if (s.isEmpty() || maxWidth <= 0) return ""
+        var w = 0
+        var i = 0
+        while (i < s.length) {
+            val cw = Width.charWidth(s[i].code)
+            if (w + cw > maxWidth) break
+            w += cw
+            i++
+        }
+        return s.substring(0, i)
     }
 
 
@@ -72,24 +94,63 @@ object Layout {
             currentW = 0
         }
 
+        fun takeByWidth(s: String, maxWidth: Int): Pair<String, String> {
+            if (s.isEmpty() || maxWidth <= 0) return "" to s
+            var w = 0
+            var i = 0
+            while (i < s.length) {
+                val cw = Width.charWidth(s[i].code)
+                if (w + cw > maxWidth) break
+                w += cw
+                i++
+            }
+            return s.substring(0, i) to s.substring(i)
+        }
+
         for (t in tokens) {
             if (t == "\n") {
                 flush()
                 continue
             }
             val tw = Width.stringWidth(t)
-            if (currentW == 0) {
-                current.append(t)
-                currentW += tw
-            } else if (currentW + 1 + tw <= width) {
-                // add with a space between tokens if previous didn't end in space
-                if (current.lastOrNull() != ' ') current.append(' ')
-                current.append(t)
-                currentW = Width.stringWidth(current.toString())
+            if (tw <= width) {
+                if (currentW == 0) {
+                    current.append(t)
+                    currentW += tw
+                } else if (currentW + 1 + tw <= width) {
+                    if (current.lastOrNull() != ' ') current.append(' ')
+                    current.append(t)
+                    currentW = Width.stringWidth(current.toString())
+                } else {
+                    flush()
+                    current.append(t)
+                    currentW = tw
+                }
             } else {
-                flush()
-                current.append(t)
-                currentW = tw
+                var rest = t
+                // Place a space before breaking if needed
+                if (currentW > 0 && current.lastOrNull() != ' ') {
+                    if (currentW + 1 <= width) {
+                        current.append(' '); currentW += 1
+                    }
+                }
+                while (rest.isNotEmpty()) {
+                    val remaining = width - currentW
+                    if (remaining <= 0) {
+                        flush()
+                    }
+                    val (chunk, tail) = takeByWidth(rest, width - currentW)
+                    if (chunk.isEmpty()) {
+                        flush()
+                        continue
+                    }
+                    current.append(chunk)
+                    currentW += Width.stringWidth(chunk)
+                    rest = tail
+                    if (rest.isNotEmpty()) {
+                        flush()
+                    }
+                }
             }
         }
         if (current.isNotEmpty()) flush()

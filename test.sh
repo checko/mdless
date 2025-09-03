@@ -40,6 +40,10 @@ run_test LayoutParaTest test/layout/LayoutParaTest.kt \
 run_test LayoutListQuoteTest test/layout/LayoutListQuoteTest.kt \
   src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt
 
+# Layout long word hard wrap
+run_test LayoutLongWordTest test/layout/LayoutLongWordTest.kt \
+  src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt
+
 # Layout nested list
 run_test LayoutNestedListTest test/layout/LayoutNestedListTest.kt \
   src/layout/Layout.kt src/layout/Width.kt src/ir/Ir.kt
