@@ -90,7 +90,7 @@ run_test PagerTest test/pager/PagerTest.kt \
 
 # App key handling (no TTY)
 run_test AppKeysTest test/cli/AppKeysTest.kt \
-  src/cli/App.kt src/cli/Keys.kt src/pager/Pager.kt
+  src/cli/App.kt src/cli/Keys.kt src/pager/Pager.kt src/tty/Tty.kt
 
 # Search
 run_test SearchTest test/pager/SearchTest.kt \

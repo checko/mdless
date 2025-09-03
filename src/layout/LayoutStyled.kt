@@ -367,7 +367,8 @@ object LayoutStyled {
             }
             // Add a header separator after first logical row
             if (outRow == rowHeight) {
-                val sep = "-".repeat(width.coerceAtLeast(1))
+                val sepWidth = colWidths.sum() + padBetween * (cols - 1)
+                val sep = "-".repeat(sepWidth.coerceAtLeast(1))
                 out += LayoutLine(listOf(StyledSpan(sep, base)), block.id, outRow++)
             }
         }
