@@ -66,7 +66,6 @@ object Parser {
                 }
                 val inner = parseMarkdown(quoteLines.joinToString("\n"))
                 blocks += Block(IdGen.next(), BlockKind.Blockquote(inner))
-                while (i < lines.size && lines[i].isBlank()) i++
                 continue
             }
 
@@ -83,7 +82,6 @@ object Parser {
             if (tableParse != null) {
                 blocks += tableParse.block
                 i = tableParse.nextIndex
-                while (i < lines.size && lines[i].isBlank()) i++
                 continue
             }
 
@@ -224,7 +222,7 @@ object Parser {
             // Scan item content: nested lists or paragraph continuations
             while (i < lines.size) {
                 val l = lines[i]
-                if (l.isBlank()) { i++; break }
+                if (l.isBlank()) { break }
                 val tt = l.trimStart()
                 val ind = l.indexOf(tt)
                 if (ind < indent) break // list ends

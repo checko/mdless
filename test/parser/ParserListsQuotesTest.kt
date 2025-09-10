@@ -18,8 +18,8 @@ fun main() {
         > second line
     """.trimIndent()
 
-    val blocks = Parser.parseMarkdown(md)
-    assertTrue(blocks.size == 3, "expected 3 blocks")
+    val blocks = Parser.parseMarkdown(md).filter { it.kind !is BlockKind.Blank }
+    assertTrue(blocks.size == 3, "expected 3 non-blank blocks")
 
     val b0 = blocks[0].kind as BlockKind.ListBlock
     assertTrue(!b0.ordered && b0.items.size == 2, "unordered list 2 items")
@@ -43,4 +43,3 @@ fun main() {
 
     println("PARSER LISTS/QUOTES TEST OK")
 }
-

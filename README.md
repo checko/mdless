@@ -70,6 +70,7 @@ Try:
 - Parser converts Markdown to a compact IR (blocks/inlines).
 - Styler maps IR to themed styles.
 - Layout wraps to terminal width using Unicode-aware column widths and expands tabs.
+- Blank lines are preserved: empty lines in source render as empty lines to avoid cramped layout.
 - Pager virtualizes a viewport over laid-out lines and supports search.
 - Renderer emits ANSI for the current viewport; non-interactive mode renders the entire document once.
 
