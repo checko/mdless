@@ -4,6 +4,7 @@ out/
 dist/
 tmp/
 test-output/
+.konan-cache/
 
 # IDE/editor
 .idea/
@@ -19,4 +20,3 @@ test-output/
 
 # Logs
 *.log
-

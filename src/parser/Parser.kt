@@ -217,6 +217,16 @@ object Parser {
             val itemBlocks = ArrayList<Block>()
             // First paragraph content (may grow with continuations)
             val paraLines = ArrayList<String>()
+            fun flushParagraph() {
+                if (paraLines.isEmpty()) return
+                val inl = ArrayList<Inline>()
+                for ((idx2, pl) in paraLines.withIndex()) {
+                    inl.addAll(parseInlines(pl))
+                    if (idx2 != paraLines.lastIndex) inl.add(Inline.SoftBreak)
+                }
+                itemBlocks += Block(IdGen.next(), BlockKind.Paragraph, inl)
+                paraLines.clear()
+            }
             paraLines += extractText(lines[i], ordered)
             i++
             // Scan item content: nested lists or paragraph continuations
@@ -227,17 +237,31 @@ object Parser {
                 val ind = l.indexOf(tt)
                 if (ind < indent) break // list ends
                 if (ind == indent && isItemLine(l)) break // next sibling item
-                if (ind > indent && isListMarker(l)) {
-                    // flush paragraph if any
-                    if (paraLines.isNotEmpty()) {
-                        val inl = ArrayList<Inline>()
-                        for ((idx2, pl) in paraLines.withIndex()) {
-                            inl.addAll(parseInlines(pl))
-                            if (idx2 != paraLines.lastIndex) inl.add(Inline.SoftBreak)
+                val fence = fenceLang(tt)
+                if (fence != null) {
+                    flushParagraph()
+                    i++
+                    val fenceIndent = ind
+                    val buf = StringBuilder()
+                    var firstLine = true
+                    while (i < lines.size) {
+                        val raw = lines[i]
+                        val trimmed = raw.trimStart()
+                        if (isFenceClose(trimmed)) {
+                            i++
+                            break
                         }
-                        itemBlocks += Block(IdGen.next(), BlockKind.Paragraph, inl)
-                        paraLines.clear()
+                        val content = if (raw.length >= fenceIndent) raw.drop(fenceIndent) else trimmed
+                        if (!firstLine) buf.append('\n') else firstLine = false
+                        buf.append(content)
+                        i++
                     }
+                    val lang = fence.ifEmpty { null }
+                    itemBlocks += Block(IdGen.next(), BlockKind.CodeBlock(lang, buf.toString()))
+                    continue
+                }
+                if (ind > indent && isListMarker(l)) {
+                    flushParagraph()
                     val nested = parseList(lines, i) ?: break
                     itemBlocks += nested.block
                     i = nested.nextIndex
@@ -248,14 +272,7 @@ object Parser {
                     i++
                 }
             }
-            if (paraLines.isNotEmpty()) {
-                val inl = ArrayList<Inline>()
-                for ((idx2, pl) in paraLines.withIndex()) {
-                    inl.addAll(parseInlines(pl))
-                    if (idx2 != paraLines.lastIndex) inl.add(Inline.SoftBreak)
-                }
-                itemBlocks += Block(IdGen.next(), BlockKind.Paragraph, inl)
-            }
+            flushParagraph()
             items += ListItem(itemBlocks)
         }
         val blk = Block(IdGen.next(), BlockKind.ListBlock(ordered, items))

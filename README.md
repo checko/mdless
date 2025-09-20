@@ -51,6 +51,8 @@ Steps:
   - `./build.sh`
 - Output: `build/mdless` (the script also normalizes `.kexe` to `mdless`).
 
+`build.sh` (and `test.sh`) default `KONAN_DATA_DIR` to `./.konan-cache` so Kotlin/Native can write its cache inside the repo. This avoids permission issues on locked-down environments where `~/.konan` is not writable. You can set `KONAN_DATA_DIR` yourself before running the scripts if you want to use a different cache location.
+
 ## Run Tests
 A lightweight test runner compiles and executes module-level tests with Kotlin/Native.
 - `./test.sh`

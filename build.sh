@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -z "${KONAN_DATA_DIR:-}" ]]; then
+  export KONAN_DATA_DIR="$PWD/.konan-cache"
+fi
+mkdir -p "$KONAN_DATA_DIR"
+
 KOTLINC="/home/charles-chang/kotlinrun/kotlin-native-prebuilt-linux-x86_64-2.2.10/bin/kotlinc-native"
 OUT_DIR="build"
 APP_OUT="$OUT_DIR/mdless"
