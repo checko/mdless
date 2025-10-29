@@ -18,5 +18,12 @@ test-output/
 **/*.obj
 **/*.klib
 
+# Gradle
+.gradle/
+gradle.zip
+gradle/
+gradlew
+gradlew.bat
+
 # Logs
 *.log
