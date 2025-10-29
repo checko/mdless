@@ -1,0 +1,266 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
+import cli.KeyMap
+import cli.KeyCmd
+import cli.App
+import ir.Block
+import ir.BlockKind
+import ir.LayoutLine
+import ir.Style
+import ir.StyledSpan
+import layout.Layout
+import layout.LayoutStyled
+import parser.Parser
+import pager.BlockLines
+import pager.PagerState
+import pager.Search
+import render.Renderer
+import tty.Tty
+import kotlin.system.exitProcess
+import kotlinx.cinterop.*
+import platform.posix.*
+import style.*
+
+private const val VERSION = "0.1.0-dev"
+
+fun printHelp(): Unit = println(
+    """
+    mdless $VERSION
+    
+    Usage:
+      mdless [FILE]
+      cat README.md | mdless
+    
+    Options:
+      --theme dark|light|no-color    Theme selection (default: dark)
+      --wrap on|off                  Line wrap (default: on)
+      --paging auto|always|never     Paging mode (default: auto)
+      --width N                      Fixed render width (default: terminal)
+      --toc                          Show table of contents (stub)
+      --no-syntax                    Disable code syntax highlight (stub)
+      --links inline|footnote|hide   Link rendering mode (default: inline)
+      --tab-width N                  Tab width (default: 4)
+      -h, --help                     Show this help
+    """.trimIndent()
+)
+
+private fun readAll(path: String): String {
+    val sb = StringBuilder()
+    memScoped {
+        val f = fopen(path, "rb")
+        if (f == null) {
+            println("Error: cannot open '$path'")
+            return ""
+        }
+        try {
+            val buf = ByteArray(4096)
+            while (true) {
+                val n = fread(buf.refTo(0), 1.convert(), buf.size.convert(), f)
+                if (n.toLong() <= 0L) break
+                sb.append(buf.copyOf(n.toInt()).decodeToString())
+            }
+        } finally {
+            fclose(f)
+        }
+    }
+    return sb.toString()
+}
+
+private fun readAllStdin(): String {
+    val sb = StringBuilder()
+    memScoped {
+        val buf = ByteArray(4096)
+        while (true) {
+            val nLong = platform.posix.read(platform.posix.STDIN_FILENO, buf.refTo(0), buf.size.convert())
+            if (nLong <= 0) break
+            val n = nLong.toInt()
+            val s = buf.copyOf(n).decodeToString()
+            sb.append(s)
+        }
+    }
+    return sb.toString()
+}
+
+private fun layoutAll(blocks: List<Block>, width: Int): Pair<List<LayoutLine>, List<BlockLines>> {
+    val all = ArrayList<LayoutLine>()
+    val meta = ArrayList<BlockLines>()
+    for (b in blocks) {
+        val lines = Layout.layoutBlock(b, width)
+        all.addAll(lines)
+        meta.add(BlockLines(b.id, lines.size))
+    }
+    return all to meta
+}
+
+private fun layoutAllStyled(blocks: List<Block>, width: Int, theme: style.Theme): Pair<List<LayoutLine>, List<BlockLines>> {
+    val all = ArrayList<LayoutLine>()
+    val meta = ArrayList<BlockLines>()
+    for (b in blocks) {
+        val lines = LayoutStyled.layoutBlock(b, width, theme)
+        all.addAll(lines)
+        meta.add(BlockLines(b.id, lines.size))
+    }
+    return all to meta
+}
+
+private fun clearScreen() {
+    print("\u001B[2J\u001B[H")
+}
+
+private fun promptLine(prefix: String): String? {
+    // Simple inline prompt; ESC cancels; Enter submits; Backspace supported
+    print(prefix)
+    val buf = StringBuilder()
+    while (true) {
+        val b = tty.Tty.readByte()
+        if (b < 0) continue
+        when (b) {
+            27 -> { // ESC
+                println()
+                return null
+            }
+            10, 13 -> { // Enter
+                println()
+                return buf.toString()
+            }
+            127 -> { // Backspace
+                if (buf.isNotEmpty()) {
+                    buf.deleteAt(buf.length - 1)
+                    // Erase last char visually
+                    print("\b \b")
+                }
+            }
+            else -> {
+                val ch = b.toChar()
+                if (ch.code in 32..126) { // printable ASCII
+                    buf.append(ch)
+                    print(ch)
+                }
+            }
+        }
+    }
+}
+
+fun main(args: Array<String>) {
+    // Ensure Unicode width functions (wcwidth) use user's locale for accurate column widths
+    platform.posix.setlocale(platform.posix.LC_ALL, "")
+    val (opts, positionals) = parseOptions(args)
+
+    val input: String
+    val interactive: Boolean
+    val hasFile = positionals.isNotEmpty()
+    if (hasFile) {
+        input = readAll(positionals[0])
+        interactive = Tty.isattyStdout()
+    } else {
+        val stdinIsTty = Tty.isattyStdin()
+        interactive = !stdinIsTty && Tty.isattyStdout()
+        input = if (stdinIsTty) {
+            printHelp(); return
+        } else readAllStdin()
+    }
+
+    val blocks = Parser.parseMarkdown(input)
+    // Map block id -> kind for quick lookup
+    val kindById = HashMap<Int, BlockKind>()
+    for (b in blocks) kindById[b.id] = b.kind
+    var size = Tty.getTermSize()
+    var width = (opts.width ?: size.cols).coerceAtLeast(20)
+    var height = (size.rows - 1).coerceAtLeast(1)
+    val theme = when (opts.themeMode) {
+        ThemeMode.Dark -> Themes.DARK
+        ThemeMode.Light -> Themes.LIGHT
+        ThemeMode.NoColor -> Themes.NOCOLOR
+    }
+    var pair = if (interactive) layoutAllStyled(blocks, width, theme) else layoutAll(blocks, width)
+    var lines = pair.first
+    var meta = pair.second
+
+    if (!interactive) {
+        // Non-interactive: render all at once, no color for now
+        val out = Renderer.render(lines, enableColor = false)
+        print(out)
+        return
+    }
+
+    val pager = PagerState(meta, height)
+    var lastQuery: String? = null
+    var lastDir: Int = 1 // 1 forward, -1 backward
+    // Cached highlight matches relative to full lines
+    var highlights: List<List<IntRange>> = emptyList()
+    Tty.withRawMode {
+        var running = true
+        var dirty = true
+        while (running) {
+            // poll size and reflow if changed
+            val ns = Tty.getTermSize()
+            if (ns.cols != width || ns.rows != height + 1) {
+                size = ns
+                width = (opts.width ?: size.cols).coerceAtLeast(20)
+                height = (size.rows - 1).coerceAtLeast(1)
+                pair = if (interactive) layoutAllStyled(blocks, width, theme) else layoutAll(blocks, width)
+                lines = pair.first
+                meta = pair.second
+                pager.setHeight(height)
+                // Invalidate highlights on reflow
+                highlights = emptyList()
+                dirty = true
+            }
+
+            if (dirty) {
+                clearScreen()
+                val range = pager.viewportRange()
+                val slice = lines.subList(range.first, range.last + 1)
+                val enableColor = opts.themeMode != ThemeMode.NoColor
+                val out = if (lastQuery.isNullOrEmpty()) {
+                    Renderer.render(slice, enableColor = enableColor, clearEol = true, maxColumns = width, crlf = true)
+                } else {
+                    if (highlights.isEmpty()) {
+                        highlights = Search.computeMatches(lines, lastQuery!!)
+                    }
+                    val hlSlice = highlights.subList(range.first, range.last + 1)
+                    Renderer.renderWithHighlights(slice, hlSlice, enableColor = enableColor, clearEol = true, maxColumns = width, crlf = true)
+                }
+                print(out)
+                val qHint = if (lastQuery.isNullOrEmpty()) "" else " [/${lastQuery}]"
+                // Clear to end of line for status as well, and CRLF for raw mode
+                print("-- ${pager.percent()}%${qHint} (q quit, / ? search) --\u001B[K\r\n")
+                dirty = false
+            }
+
+            val b = tty.Tty.readByte()
+            if (b >= 0) {
+                val cmd = KeyMap.readCmd(b)
+                when (cmd) {
+                    KeyCmd.Quit -> running = false
+                    KeyCmd.SearchForward, KeyCmd.SearchBackward -> {
+                        val forward = (cmd == KeyCmd.SearchForward)
+                        val q = promptLine(if (forward) "/" else "?")
+                        if (q != null && q.isNotEmpty()) {
+                            lastQuery = q
+                            lastDir = if (forward) 1 else -1
+                            val start = pager.viewportRange().first
+                            val hit = if (forward) Search.findNext(lines, q, start) else Search.findPrev(lines, q, start)
+                            if (hit != null) pager.setTopLine(hit)
+                            highlights = emptyList()
+                            dirty = true
+                        }
+                    }
+                    KeyCmd.SearchNext, KeyCmd.SearchPrev -> {
+                        val q = lastQuery
+                        if (q != null && q.isNotEmpty()) {
+                            val forward = if (cmd == KeyCmd.SearchNext) lastDir == 1 else lastDir == -1
+                            val start = pager.viewportRange().first
+                            val hit = if (forward) Search.findNext(lines, q, start) else Search.findPrev(lines, q, start)
+                            if (hit != null) { pager.setTopLine(hit); dirty = true }
+                        }
+                    }
+                    else -> {
+                        val cont = App.handleKey(pager, cmd)
+                        if (!cont) running = false else if (cmd != KeyCmd.None) dirty = true
+                    }
+                }
+            }
+        }
+    }
+}

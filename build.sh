@@ -1,26 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ -z "${KONAN_DATA_DIR:-}" ]]; then
-  export KONAN_DATA_DIR="$PWD/.konan-cache"
-fi
-mkdir -p "$KONAN_DATA_DIR"
+# Build script using Gradle for cross-compilation
+# Usage:
+#   ./build.sh          # Build x64 version (default)
+#   ./build.sh arm64    # Build ARM64 version for Raspberry Pi
+#   ./build.sh all      # Build both versions
 
-KOTLINC="/home/charles-chang/kotlinrun/kotlin-native-prebuilt-linux-x86_64-2.2.10/bin/kotlinc-native"
-OUT_DIR="build"
-APP_OUT="$OUT_DIR/mdless"
+TARGET="${1:-x64}"
 
-mkdir -p "$OUT_DIR"
-
-echo "[build] Compiling application to $APP_OUT"
-"$KOTLINC" -opt -o "$APP_OUT" \
-  src/**/*.kt
-
-# Kotlin/Native may emit a .kexe on Linux; normalize to 'mdless'
-if [[ -f "$APP_OUT.kexe" ]]; then
-  mv -f "$APP_OUT.kexe" "$APP_OUT"
-fi
-
-chmod +x "$APP_OUT" || true
-
-echo "[build] Done: $APP_OUT"
+case "$TARGET" in
+    "x64")
+        echo "[build] Building x64 version..."
+        ./gradlew buildX64
+        echo "[build] Done: build/bin/linuxX64/debugExecutable/mdless.kexe"
+        ;;
+    "arm64")
+        echo "[build] Building ARM64 version for Raspberry Pi..."
+        ./gradlew buildArm64
+        echo "[build] Done: build/bin/linuxArm64/debugExecutable/mdless-arm64.kexe"
+        ;;
+    "all")
+        echo "[build] Building both x64 and ARM64 versions..."
+        ./gradlew buildAll
+        echo "[build] Done:"
+        echo "  x64:   build/bin/linuxX64/debugExecutable/mdless.kexe"
+        echo "  ARM64: build/bin/linuxArm64/debugExecutable/mdless-arm64.kexe"
+        ;;
+    *)
+        echo "Usage: $0 [x64|arm64|all]"
+        echo "  x64   - Build x64 version (default)"
+        echo "  arm64 - Build ARM64 version for Raspberry Pi"
+        echo "  all   - Build both versions"
+        exit 1
+        ;;
+esac

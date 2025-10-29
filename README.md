@@ -42,16 +42,23 @@ Interactive color/styling is active when a TTY is detected; non-interactive outp
 
 ## Build
 Requirements:
-- Linux x86_64
-- Kotlin/Native compiler (tested with 2.2.10)
+- Linux x86_64 (for building)
+- Java 11+ (for Gradle)
+- Kotlin Multiplatform Gradle plugin (automatically downloaded)
 
 Steps:
-- Ensure the Kotlin/Native compiler path in `build.sh` (`KOTLINC=.../kotlinc-native`) matches your environment.
-- Build the binary:
-  - `./build.sh`
-- Output: `build/mdless` (the script also normalizes `.kexe` to `mdless`).
+- Build for current platform (x64):
+  - `./build.sh` or `./build.sh x64`
+- Build for Raspberry Pi (ARM64):
+  - `./build.sh arm64`
+- Build both versions:
+  - `./build.sh all`
 
-`build.sh` (and `test.sh`) default `KONAN_DATA_DIR` to `./.konan-cache` so Kotlin/Native can write its cache inside the repo. This avoids permission issues on locked-down environments where `~/.konan` is not writable. You can set `KONAN_DATA_DIR` yourself before running the scripts if you want to use a different cache location.
+Output:
+- x64 version: `build/bin/linuxX64/debugExecutable/mdless.kexe`
+- ARM64 version: `build/bin/linuxArm64/debugExecutable/mdless-arm64.kexe`
+
+The build system uses Gradle with Kotlin Multiplatform for cross-compilation. The first build will download Kotlin Native toolchains and dependencies.
 
 ## Run Tests
 A lightweight test runner compiles and executes module-level tests with Kotlin/Native.
