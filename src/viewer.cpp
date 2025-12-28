@@ -126,22 +126,21 @@ void Viewer::refresh() {
     viewHeight = rows - 1;
     viewWidth = cols;
     
-    term.moveCursor(1, 1);
+    // Move to top and clear screen
+    std::cout << "\033[H";  // Move to home position
     
     // Draw visible lines
     for (int i = 0; i < viewHeight; ++i) {
         int lineIdx = scrollOffset + i;
         
-        // Clear line
-        std::cout << "\033[K";
+        // Clear line first
+        std::cout << "\033[2K";  // Clear entire line
         
         if (lineIdx < static_cast<int>(renderedLines.size())) {
             std::cout << renderedLines[lineIdx];
         }
         
-        if (i < viewHeight - 1) {
-            std::cout << "\r\n";
-        }
+        std::cout << "\r\n";
     }
     
     drawStatusBar();
@@ -152,8 +151,8 @@ void Viewer::drawStatusBar() {
     auto [rows, cols] = term.getSize();
     term.moveCursor(rows, 1);
     
-    // Inverse colors for status bar
-    std::cout << "\033[7m";
+    // Clear line and set inverse colors for status bar
+    std::cout << "\033[2K\033[7m";
     
     // Left side: filename
     std::string left = " " + filename;
@@ -165,22 +164,22 @@ void Viewer::drawStatusBar() {
     
     std::string right;
     if (scrollOffset == 0 && totalLines <= viewHeight) {
-        right = " All ";
+        right = "All ";
     } else if (scrollOffset == 0) {
-        right = " Top ";
+        right = "Top ";
     } else if (scrollOffset + viewHeight >= totalLines) {
-        right = " End ";
+        right = "End ";
     } else {
-        right = " " + std::to_string(percent) + "% ";
+        right = std::to_string(percent) + "% ";
     }
     
     // Add search info if searching
     if (!searchPattern.empty()) {
-        right = " /" + searchPattern + " " + right;
+        right = "/" + searchPattern + " " + right;
     }
     
-    // Fill the middle with spaces
-    int padding = cols - left.length() - right.length();
+    // Calculate padding - fill the entire line
+    int padding = cols - static_cast<int>(left.length()) - static_cast<int>(right.length());
     if (padding < 0) padding = 0;
     
     std::cout << left << std::string(padding, ' ') << right;
