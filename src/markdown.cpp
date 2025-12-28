@@ -4,7 +4,7 @@
 #include <sstream>
 
 MarkdownRenderer::MarkdownRenderer() 
-    : inCodeBlock(false), terminalWidth(80) {
+    : inCodeBlock(false), inTable(false), terminalWidth(80) {
 }
 
 std::vector<std::string> MarkdownRenderer::render(const std::string& content, int termWidth) {
@@ -76,6 +76,26 @@ std::vector<std::string> MarkdownRenderer::render(const std::string& content, in
             std::string itemText = olMatch[3].str();
             lines.push_back(indent + renderListItem(itemText, true, number));
             continue;
+        }
+        
+        // Table handling
+        if (isTableRow(line)) {
+            if (!inTable) {
+                inTable = true;
+                tableRows.clear();
+            }
+            if (!isTableSeparator(line)) {
+                tableRows.push_back(parseTableRow(line));
+            }
+            continue;
+        } else if (inTable) {
+            // End of table, render it
+            auto tableLines = renderTable(tableRows);
+            for (const auto& tableLine : tableLines) {
+                lines.push_back(tableLine);
+            }
+            tableRows.clear();
+            inTable = false;
         }
         
         // Empty lines
@@ -293,4 +313,128 @@ std::vector<std::string> MarkdownRenderer::wrapText(const std::string& text, int
     // This is a known limitation
     lines.push_back(prefix + text);
     return lines;
+}
+
+bool MarkdownRenderer::isTableRow(const std::string& line) {
+    // A table row starts with optional whitespace, then a pipe
+    // Or contains pipes separating cells
+    if (line.empty()) return false;
+    
+    // Check if line contains at least one pipe and looks like a table
+    size_t pipeCount = 0;
+    for (char c : line) {
+        if (c == '|') pipeCount++;
+    }
+    
+    return pipeCount >= 1;
+}
+
+bool MarkdownRenderer::isTableSeparator(const std::string& line) {
+    // Table separator looks like: |---|---|---| or |----|:---:|----:|
+    std::regex sepRegex("^\\|?[\\s:]*-+[\\s:|-]*$");
+    return std::regex_match(line, sepRegex);
+}
+
+std::vector<std::string> MarkdownRenderer::parseTableRow(const std::string& line) {
+    std::vector<std::string> cells;
+    std::string trimmedLine = line;
+    
+    // Remove leading/trailing pipes
+    if (!trimmedLine.empty() && trimmedLine.front() == '|') {
+        trimmedLine = trimmedLine.substr(1);
+    }
+    if (!trimmedLine.empty() && trimmedLine.back() == '|') {
+        trimmedLine = trimmedLine.substr(0, trimmedLine.length() - 1);
+    }
+    
+    // Split by pipe
+    std::istringstream stream(trimmedLine);
+    std::string cell;
+    while (std::getline(stream, cell, '|')) {
+        // Trim whitespace
+        size_t start = cell.find_first_not_of(" \t");
+        size_t end = cell.find_last_not_of(" \t");
+        if (start != std::string::npos && end != std::string::npos) {
+            cells.push_back(cell.substr(start, end - start + 1));
+        } else {
+            cells.push_back("");
+        }
+    }
+    
+    return cells;
+}
+
+std::vector<std::string> MarkdownRenderer::renderTable(const std::vector<std::vector<std::string>>& rows) {
+    std::vector<std::string> output;
+    
+    if (rows.empty()) return output;
+    
+    // Calculate column widths
+    size_t numCols = 0;
+    for (const auto& row : rows) {
+        numCols = std::max(numCols, row.size());
+    }
+    
+    std::vector<size_t> colWidths(numCols, 0);
+    for (const auto& row : rows) {
+        for (size_t i = 0; i < row.size(); ++i) {
+            colWidths[i] = std::max(colWidths[i], row[i].length());
+        }
+    }
+    
+    // Ensure minimum width of 3 for each column
+    for (auto& w : colWidths) {
+        if (w < 3) w = 3;
+    }
+    
+    // Build top border: +-------+-------+
+    std::string topBorder = Color::BrightBlack + "+";
+    for (size_t i = 0; i < numCols; ++i) {
+        topBorder += std::string(colWidths[i] + 2, '-') + "+";
+    }
+    topBorder += Color::Reset;
+    output.push_back(topBorder);
+    
+    // Render each row
+    for (size_t rowIdx = 0; rowIdx < rows.size(); ++rowIdx) {
+        const auto& row = rows[rowIdx];
+        
+        std::string line = Color::BrightBlack + "|" + Color::Reset;
+        for (size_t i = 0; i < numCols; ++i) {
+            std::string cellContent = (i < row.size()) ? row[i] : "";
+            
+            // Pad cell to column width
+            size_t padding = colWidths[i] - cellContent.length();
+            
+            // Apply formatting: header row (first row) gets bold
+            if (rowIdx == 0) {
+                line += " " + Color::Bold + Color::BrightCyan + cellContent + Color::Reset;
+            } else {
+                line += " " + processInlineFormatting(cellContent);
+            }
+            
+            line += std::string(padding + 1, ' ') + Color::BrightBlack + "|" + Color::Reset;
+        }
+        output.push_back(line);
+        
+        // Add separator after header row
+        if (rowIdx == 0) {
+            std::string sep = Color::BrightBlack + "+";
+            for (size_t i = 0; i < numCols; ++i) {
+                sep += std::string(colWidths[i] + 2, '=') + "+";
+            }
+            sep += Color::Reset;
+            output.push_back(sep);
+        }
+    }
+    
+    // Bottom border
+    std::string bottomBorder = Color::BrightBlack + "+";
+    for (size_t i = 0; i < numCols; ++i) {
+        bottomBorder += std::string(colWidths[i] + 2, '-') + "+";
+    }
+    bottomBorder += Color::Reset;
+    output.push_back(bottomBorder);
+    
+    return output;
 }

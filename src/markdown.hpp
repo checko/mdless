@@ -21,6 +21,12 @@ private:
     std::string renderImage(const std::string& alt, const std::string& url);
     std::string renderLink(const std::string& text, const std::string& url);
     
+    // Table rendering
+    std::vector<std::string> renderTable(const std::vector<std::vector<std::string>>& rows);
+    bool isTableRow(const std::string& line);
+    bool isTableSeparator(const std::string& line);
+    std::vector<std::string> parseTableRow(const std::string& line);
+    
     // Inline formatting
     std::string processInlineFormatting(const std::string& text);
     std::string processBold(const std::string& text);
@@ -32,7 +38,9 @@ private:
     
     // State tracking for multi-line elements
     bool inCodeBlock;
+    bool inTable;
     std::string codeBlockContent;
+    std::vector<std::vector<std::string>> tableRows;
     int terminalWidth;
     
     // Word wrapping
