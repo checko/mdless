@@ -378,7 +378,10 @@ std::vector<std::string> MarkdownRenderer::renderTable(const std::vector<std::ve
     std::vector<size_t> colWidths(numCols, 0);
     for (const auto& row : rows) {
         for (size_t i = 0; i < row.size(); ++i) {
-            colWidths[i] = std::max(colWidths[i], row[i].length());
+            // Calculate visible width of processed cell content
+            std::string processed = getProcessedCell(row[i]);
+            size_t cellWidth = visibleWidth(processed);
+            colWidths[i] = std::max(colWidths[i], cellWidth);
         }
     }
     
@@ -402,15 +405,17 @@ std::vector<std::string> MarkdownRenderer::renderTable(const std::vector<std::ve
         std::string line = Color::BrightBlack + "|" + Color::Reset;
         for (size_t i = 0; i < numCols; ++i) {
             std::string cellContent = (i < row.size()) ? row[i] : "";
+            std::string processedCell = getProcessedCell(cellContent);
+            size_t cellVisibleWidth = visibleWidth(processedCell);
             
-            // Pad cell to column width
-            size_t padding = colWidths[i] - cellContent.length();
+            // Calculate padding based on visible width
+            size_t padding = (colWidths[i] > cellVisibleWidth) ? (colWidths[i] - cellVisibleWidth) : 0;
             
-            // Apply formatting: header row (first row) gets bold
+            // Apply formatting: header row (first row) gets bold cyan
             if (rowIdx == 0) {
                 line += " " + Color::Bold + Color::BrightCyan + cellContent + Color::Reset;
             } else {
-                line += " " + processInlineFormatting(cellContent);
+                line += " " + processedCell;
             }
             
             line += std::string(padding + 1, ' ') + Color::BrightBlack + "|" + Color::Reset;
@@ -437,4 +442,29 @@ std::vector<std::string> MarkdownRenderer::renderTable(const std::vector<std::ve
     output.push_back(bottomBorder);
     
     return output;
+}
+
+// Calculate visible width by stripping ANSI escape codes
+size_t MarkdownRenderer::visibleWidth(const std::string& str) {
+    size_t width = 0;
+    bool inEscape = false;
+    
+    for (size_t i = 0; i < str.length(); ++i) {
+        if (str[i] == '\033') {
+            inEscape = true;
+        } else if (inEscape) {
+            if (str[i] == 'm') {
+                inEscape = false;
+            }
+        } else {
+            ++width;
+        }
+    }
+    
+    return width;
+}
+
+// Pre-process a cell to get its rendered form (for width calculation)
+std::string MarkdownRenderer::getProcessedCell(const std::string& cell) {
+    return processInlineFormatting(cell);
 }

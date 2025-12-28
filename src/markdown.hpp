@@ -43,6 +43,10 @@ private:
     std::vector<std::vector<std::string>> tableRows;
     int terminalWidth;
     
+    // Utility functions
+    size_t visibleWidth(const std::string& str);  // Calculate width without ANSI codes
+    std::string getProcessedCell(const std::string& cell);  // Pre-process cell for width calculation
+    
     // Word wrapping
     std::vector<std::string> wrapText(const std::string& text, int width, const std::string& prefix = "");
 };
