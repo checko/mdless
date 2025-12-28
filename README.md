@@ -2,6 +2,15 @@
 
 A fast, minimal Markdown viewer for the terminal. It renders Markdown to ANSI-styled text and lets you navigate with less-like keys, including search with highlights and resize-aware wrapping. Built in Kotlin/Native for a single self-contained binary on Linux. [^codex]
 
+## Branches
+
+| Branch | Language | Description |
+|--------|----------|-------------|
+| `main` | Kotlin/Native | The primary implementation with full features, theming, and Unicode-aware layout |
+| `cpp` | C++17 | An alternative pure C++ implementation with no external dependencies |
+
+> **Note:** The `cpp` branch is a completely separate implementation written in C++17, not a Kotlin/Native binding. It provides similar functionality (markdown rendering, less-like navigation, search) but with a different codebase optimized for minimal dependencies and portability.
+
 ## Features
 - Markdown coverage: headings, paragraphs, lists (nested), blockquotes, fenced code (with language tag captured), horizontal rules, links/images (alt text only), basic pipe tables with per-column alignment.
 - Theming: dark, light, and no-color themes; inline styles for headings, code, links, quotes.
