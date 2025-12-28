@@ -246,8 +246,8 @@ std::string MarkdownRenderer::processInlineCode(const std::string& text) {
 
 std::string MarkdownRenderer::processLinks(const std::string& text) {
     std::string result = text;
-    // Match [text](url) but not ![text](url)
-    std::regex linkRegex("(?<!!)\\[([^\\]]+)\\]\\(([^)]+)\\)");
+    // Match [text](url) - images are already processed first
+    std::regex linkRegex("\\[([^\\]]+)\\]\\(([^)]+)\\)");
     
     std::smatch match;
     std::string::const_iterator searchStart(result.cbegin());
