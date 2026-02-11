@@ -20,12 +20,14 @@ private:
     Terminal& term;
     MarkdownRenderer renderer;
     
+    std::string rawContent;           // Raw file content for re-rendering on resize
     std::vector<std::string> renderedLines;
     std::string filename;
     
     int scrollOffset;
     int viewHeight;
     int viewWidth;
+    int lastWrapWidth;                // Width used for last wrap, to detect resize
     
     // Search state
     std::string searchPattern;
@@ -36,6 +38,8 @@ private:
     void refresh();
     void drawStatusBar();
     void drawHelpScreen();
+    void rerenderAndWrap();
+    std::vector<std::string> wrapLine(const std::string& str, int maxWidth);
     
     // Navigation
     void scrollDown(int lines = 1);

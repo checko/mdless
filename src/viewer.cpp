@@ -3,10 +3,11 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include <cstdint>
 
 Viewer::Viewer(Terminal& terminal) 
     : term(terminal), scrollOffset(0), viewHeight(24), viewWidth(80),
-      currentMatch(-1) {
+      lastWrapWidth(0), currentMatch(-1) {
 }
 
 bool Viewer::loadFile(const std::string& fname) {
@@ -19,16 +20,30 @@ bool Viewer::loadFile(const std::string& fname) {
     
     std::stringstream buffer;
     buffer << file.rdbuf();
-    std::string content = buffer.str();
+    rawContent = buffer.str();
     file.close();
     
     auto [rows, cols] = term.getSize();
     viewHeight = rows - 1;  // Leave room for status bar
     viewWidth = cols;
     
-    renderedLines = renderer.render(content, viewWidth);
+    rerenderAndWrap();
     
     return true;
+}
+
+void Viewer::rerenderAndWrap() {
+    auto rawLines = renderer.render(rawContent, viewWidth);
+    
+    // Wrap each rendered line to fit within terminal width
+    renderedLines.clear();
+    for (const auto& line : rawLines) {
+        auto wrapped = wrapLine(line, viewWidth);
+        for (const auto& wl : wrapped) {
+            renderedLines.push_back(wl);
+        }
+    }
+    lastWrapWidth = viewWidth;
 }
 
 void Viewer::run() {
@@ -121,15 +136,142 @@ void Viewer::run() {
     term.disableRawMode();
 }
 
+// Determine the display width of a Unicode code point in a terminal.
+// CJK ideographs, fullwidth forms, and certain other characters occupy 2 columns.
+static int charDisplayWidth(uint32_t codepoint) {
+    // CJK Unified Ideographs and extensions
+    if ((codepoint >= 0x4E00 && codepoint <= 0x9FFF) ||   // CJK Unified Ideographs
+        (codepoint >= 0x3400 && codepoint <= 0x4DBF) ||   // CJK Extension A
+        (codepoint >= 0x20000 && codepoint <= 0x2A6DF) || // CJK Extension B
+        (codepoint >= 0x2A700 && codepoint <= 0x2B73F) || // CJK Extension C
+        (codepoint >= 0x2B740 && codepoint <= 0x2B81F) || // CJK Extension D
+        (codepoint >= 0xF900 && codepoint <= 0xFAFF) ||   // CJK Compatibility Ideographs
+        // Fullwidth Forms
+        (codepoint >= 0xFF01 && codepoint <= 0xFF60) ||
+        (codepoint >= 0xFFE0 && codepoint <= 0xFFE6) ||
+        // CJK Symbols and Punctuation, Hiragana, Katakana
+        (codepoint >= 0x3000 && codepoint <= 0x303F) ||
+        (codepoint >= 0x3040 && codepoint <= 0x309F) ||
+        (codepoint >= 0x30A0 && codepoint <= 0x30FF) ||
+        // Hangul
+        (codepoint >= 0xAC00 && codepoint <= 0xD7AF) ||
+        // Enclosed CJK
+        (codepoint >= 0x3200 && codepoint <= 0x32FF) ||
+        (codepoint >= 0xFE30 && codepoint <= 0xFE4F) ||   // CJK Compatibility Forms
+        // Bopomofo
+        (codepoint >= 0x3100 && codepoint <= 0x312F) ||
+        // Box Drawing and Block Elements (used in this app for table borders)
+        (codepoint >= 0x2500 && codepoint <= 0x257F) ||   // Box Drawing - actually single width
+        (codepoint >= 0x2580 && codepoint <= 0x259F)) {   // Block Elements - actually single width
+        // Box drawing and block elements are single width in most terminals
+        if (codepoint >= 0x2500 && codepoint <= 0x259F) return 1;
+        return 2;
+    }
+    return 1;
+}
+
+// Wrap a single rendered line (with ANSI codes) into multiple lines that fit within maxWidth columns.
+// Properly handles multi-byte UTF-8 and CJK double-width characters.
+// Carries active ANSI styles forward to continuation lines.
+std::vector<std::string> Viewer::wrapLine(const std::string& str, int maxWidth) {
+    std::vector<std::string> result;
+    if (maxWidth <= 0) maxWidth = 1;
+    
+    std::string currentLine;
+    int visibleWidth = 0;
+    // Track active ANSI escape codes so continuation lines inherit styles
+    std::string activeAnsi;
+    
+    for (size_t i = 0; i < str.length(); ) {
+        unsigned char ch = static_cast<unsigned char>(str[i]);
+        
+        if (ch == '\033') {
+            // Start of ANSI escape sequence - accumulate it
+            std::string escSeq;
+            escSeq += str[i];
+            ++i;
+            while (i < str.length()) {
+                escSeq += str[i];
+                if (str[i] == 'm') {
+                    ++i;
+                    break;
+                }
+                ++i;
+            }
+            currentLine += escSeq;
+            // Track the active style: reset clears it, else append
+            if (escSeq == "\033[0m") {
+                activeAnsi.clear();
+            } else {
+                activeAnsi += escSeq;
+            }
+        } else {
+            // Decode UTF-8 to get the codepoint and byte length
+            uint32_t codepoint = 0;
+            int byteLen = 1;
+            
+            if (ch < 0x80) {
+                codepoint = ch;
+                byteLen = 1;
+            } else if ((ch & 0xE0) == 0xC0) {
+                codepoint = ch & 0x1F;
+                byteLen = 2;
+            } else if ((ch & 0xF0) == 0xE0) {
+                codepoint = ch & 0x0F;
+                byteLen = 3;
+            } else if ((ch & 0xF8) == 0xF0) {
+                codepoint = ch & 0x07;
+                byteLen = 4;
+            }
+            
+            // Read continuation bytes
+            for (int j = 1; j < byteLen && (i + j) < str.length(); ++j) {
+                codepoint = (codepoint << 6) | (static_cast<unsigned char>(str[i + j]) & 0x3F);
+            }
+            
+            int charWidth = charDisplayWidth(codepoint);
+            
+            // If adding this character would exceed width, start a new line
+            if (visibleWidth + charWidth > maxWidth) {
+                // Close styles on this line
+                if (!activeAnsi.empty()) {
+                    currentLine += "\033[0m";
+                }
+                result.push_back(currentLine);
+                // Start new line with the carried-over style
+                currentLine = activeAnsi;
+                visibleWidth = 0;
+            }
+            
+            // Copy all bytes of this character
+            for (int j = 0; j < byteLen && (i + j) < str.length(); ++j) {
+                currentLine += str[i + j];
+            }
+            visibleWidth += charWidth;
+            i += byteLen;
+        }
+    }
+    
+    // Push the last line (even if empty, to preserve blank lines)
+    result.push_back(currentLine);
+    
+    return result;
+}
+
 void Viewer::refresh() {
     auto [rows, cols] = term.getSize();
     viewHeight = rows - 1;
     viewWidth = cols;
     
+    // Re-wrap if terminal width changed
+    if (viewWidth != lastWrapWidth) {
+        rerenderAndWrap();
+    }
+    
     // Move to top and clear screen
     std::cout << "\033[H";  // Move to home position
     
-    // Draw visible lines
+    // Draw visible lines (already wrapped to fit terminal width)
     for (int i = 0; i < viewHeight; ++i) {
         int lineIdx = scrollOffset + i;
         
