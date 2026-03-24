@@ -10,6 +10,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# Platform-specific flags
+if(WIN32)
+    # Windows: Enable UTF-8 support
+    add_compile_options(-finput-charset=UTF-8 -fexec-charset=UTF-8)
+    # Link against kernel32 for Windows API
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lkernel32")
+endif()
+
 # Source files
 set(SOURCES
     src/main.cpp

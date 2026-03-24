@@ -4,6 +4,10 @@
 #include <string>
 #include <utility>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 // ANSI Color codes
 namespace Color {
     const std::string Reset      = "\033[0m";
@@ -78,7 +82,18 @@ public:
     
 private:
     bool rawModeEnabled;
+    
+#ifdef _WIN32
+    // Windows-specific members
+    bool vtModeEnabled;
+    HANDLE hStdin;
+    HANDLE hStdout;
+    DWORD origInputMode;
+    DWORD origOutputMode;
+#else
+    // POSIX-specific members
     struct termios* origTermios;
+#endif
 };
 
 #endif // MDLESS_TERMINAL_HPP

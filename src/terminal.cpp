@@ -1,10 +1,201 @@
 #include "terminal.hpp"
-#include <unistd.h>
-#include <termios.h>
-#include <sys/ioctl.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+
+#ifdef _WIN32
+#include <windows.h>
+
+// File descriptor constants for write()
+#define STDOUT_FILENO 1
+#define STDIN_FILENO 0
+
+// Write function wrapper for Windows
+static ssize_t write(int fd, const void* buf, size_t count) {
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD written;
+    if (!WriteFile(hOut, buf, (DWORD)count, &written, NULL)) {
+        return -1;
+    }
+    return (ssize_t)written;
+}
+
+Terminal::Terminal() 
+    : rawModeEnabled(false), vtModeEnabled(false),
+      hStdin(GetStdHandle(STD_INPUT_HANDLE)),
+      hStdout(GetStdHandle(STD_OUTPUT_HANDLE)) {
+}
+
+Terminal::~Terminal() {
+    if (rawModeEnabled) {
+        disableRawMode();
+    }
+}
+
+void Terminal::enableRawMode() {
+    if (rawModeEnabled) return;
+    
+    // Get current input mode
+    if (!GetConsoleMode(hStdin, &origInputMode)) {
+        return;
+    }
+    
+    // Enable virtual terminal input for escape sequences
+    // Disable echo and line buffering for raw-like behavior
+    DWORD newInputMode = origInputMode | ENABLE_VIRTUAL_TERMINAL_INPUT;
+    newInputMode &= ~ENABLE_ECHO_INPUT;
+    newInputMode &= ~ENABLE_LINE_INPUT;
+    newInputMode &= ~ENABLE_MOUSE_INPUT;
+    
+    if (!SetConsoleMode(hStdin, newInputMode)) {
+        return;
+    }
+    
+    // Get current output mode
+    if (!GetConsoleMode(hStdout, &origOutputMode)) {
+        return;
+    }
+    
+    // Enable virtual terminal processing for ANSI escape sequences
+    if (origOutputMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) {
+        vtModeEnabled = true;
+    } else {
+        // Try to enable it
+        DWORD newOutputMode = origOutputMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        if (SetConsoleMode(hStdout, newOutputMode)) {
+            vtModeEnabled = true;
+        }
+    }
+    
+    rawModeEnabled = true;
+}
+
+void Terminal::disableRawMode() {
+    if (!rawModeEnabled) return;
+    
+    // Restore original input mode
+    SetConsoleMode(hStdin, origInputMode);
+    
+    // Restore original output mode
+    SetConsoleMode(hStdout, origOutputMode);
+    
+    rawModeEnabled = false;
+    vtModeEnabled = false;
+}
+
+std::pair<int, int> Terminal::getSize() const {
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    
+    if (!GetConsoleScreenBufferInfo(hStdout, &info)) {
+        return {24, 80};  // Default fallback
+    }
+    
+    // Calculate rows from window size
+    int rows = info.srWindow.Bottom - info.srWindow.Top + 1;
+    int cols = info.srWindow.Right - info.srWindow.Left + 1;
+    
+    return {rows, cols};
+}
+
+int Terminal::getRows() const {
+    return getSize().first;
+}
+
+int Terminal::getCols() const {
+    return getSize().second;
+}
+
+int Terminal::readKey() {
+    INPUT_RECORD record;
+    DWORD eventsRead;
+    
+    // Peek to check if there are events
+    DWORD keysAvailable;
+    if (!GetNumberOfConsoleInputEvents(hStdin, &keysAvailable)) {
+        return -1;
+    }
+    
+    if (keysAvailable == 0) {
+        // No input available
+        return -1;
+    }
+    
+    // Read the input record
+    if (!ReadConsoleInput(hStdin, &record, 1, &eventsRead)) {
+        return -1;
+    }
+    
+    if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
+        DWORD keyCode = record.Event.KeyEvent.wVirtualKeyCode;
+        char charCode = record.Event.KeyEvent.uChar.AsciiChar;
+        
+        // Handle special keys
+        switch (keyCode) {
+            case VK_ESCAPE:
+                return KEY_ESCAPE;
+            case VK_RETURN:
+                return KEY_ENTER;
+            case VK_UP:
+                return KEY_UP;
+            case VK_DOWN:
+                return KEY_DOWN;
+            case VK_LEFT:
+                return KEY_LEFT;
+            case VK_RIGHT:
+                return KEY_RIGHT;
+            case VK_PRIOR:
+                return KEY_PAGEUP;
+            case VK_NEXT:
+                return KEY_PAGEDOWN;
+            case VK_HOME:
+                return KEY_HOME;
+            case VK_END:
+                return KEY_END;
+            case VK_DELETE:
+                return 127;  // Similar to backspace
+        }
+        
+        // Handle character keys
+        if (charCode != 0) {
+            return charCode;
+        }
+    }
+    
+    return -1;
+}
+
+void Terminal::clearScreen() {
+    // ANSI escape sequence for clear screen
+    const char* clear = "\033[2J";
+    write(STDOUT_FILENO, clear, 4);
+    
+    // Move cursor to home position
+    const char* home = "\033[H";
+    write(STDOUT_FILENO, home, 3);
+}
+
+void Terminal::moveCursor(int row, int col) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "\033[%d;%dH", row, col);
+    write(STDOUT_FILENO, buf, strlen(buf));
+}
+
+void Terminal::hideCursor() {
+    const char* hide = "\033[?25l";
+    write(STDOUT_FILENO, hide, 6);
+}
+
+void Terminal::showCursor() {
+    const char* show = "\033[?25h";
+    write(STDOUT_FILENO, show, 6);
+}
+
+#else
+
+// POSIX/Linux implementation
+#include <unistd.h>
+#include <termios.h>
+#include <sys/ioctl.h>
 
 Terminal::Terminal() : rawModeEnabled(false), origTermios(new struct termios) {
 }
@@ -143,3 +334,5 @@ void Terminal::hideCursor() {
 void Terminal::showCursor() {
     write(STDOUT_FILENO, "\033[?25h", 6);
 }
+
+#endif // _WIN32
