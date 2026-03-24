@@ -9,6 +9,8 @@ Download and install from https://winlibs.com/:
 - **winlibs personal build** with GCC + LLVM/Clang
 - Includes: GCC 14.2.0, LLVM/Clang 18.1.8, CMake 3.30.2, GNU Make 4.4.1
 
+**Note:** Use GCC (`g++.exe`) for best Windows compatibility. Avoid Clang on Windows which may have UCRT compatibility issues.
+
 Example installation path: `D:\mingw64\`
 
 ### Option 2: Using MSYS2
@@ -87,8 +89,14 @@ After building, copy **all files** from the build directory to your target locat
 - `libstdc++-6.dll` (MinGW C++ runtime)
 
 ```bash
-# Build first, then:
+# Test options (non-interactive):
+./mdless.exe --version
+./mdless.exe --help
+
+# To view a file, run in Windows Terminal, CMD, or PowerShell:
 ./mdless.exe README.md
+
+# Then use keyboard controls and press 'q' to quit
 ```
 
 ### Navigation Controls
