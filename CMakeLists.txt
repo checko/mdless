@@ -31,3 +31,26 @@ add_executable(mdless ${SOURCES})
 
 # Install target
 install(TARGETS mdless DESTINATION bin)
+
+# Copy MinGW DLLs to build directory for Windows
+if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Find g++.exe to get the bin directory
+    get_filename_component(GCC_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    
+    # Copy required MinGW DLLs
+    if(EXISTS "${GCC_BIN_DIR}/libgcc_s_seh-1.dll")
+        add_custom_command(TARGET mdless POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${GCC_BIN_DIR}/libgcc_s_seh-1.dll"
+                $<TARGET_FILE_DIR:mdless>
+        )
+    endif()
+    
+    if(EXISTS "${GCC_BIN_DIR}/libstdc++-6.dll")
+        add_custom_command(TARGET mdless POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${GCC_BIN_DIR}/libstdc++-6.dll"
+                $<TARGET_FILE_DIR:mdless>
+        )
+    endif()
+endif()
