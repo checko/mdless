@@ -81,6 +81,11 @@ The project requires:
 
 ## Running
 
+After building, copy **all files** from the build directory to your target location:
+- `mdless.exe` (executable)
+- `libgcc_s_seh-1.dll` (MinGW runtime)
+- `libstdc++-6.dll` (MinGW C++ runtime)
+
 ```bash
 # Build first, then:
 ./mdless.exe README.md
@@ -109,6 +114,10 @@ The project requires:
   - PowerShell
 
 ## Troubleshooting
+
+### "DLL not found" error
+- Copy all files from build directory: `mdless.exe`, `libgcc_s_seh-1.dll`, `libstdc++-6.dll`
+- The DLLs must be in the same folder as `mdless.exe` when you run it
 
 ### "Cannot open file" error
 - Ensure you're in the correct directory
