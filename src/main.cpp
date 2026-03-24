@@ -4,7 +4,28 @@
 #include "terminal.hpp"
 #include "viewer.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 const char* VERSION = "1.0.0";
+
+#ifdef _WIN32
+void initWindowsConsole() {
+    // Set console output code page to UTF-8
+    SetConsoleOutputCP(CP_UTF8);
+    
+    // Enable virtual terminal processing for ANSI escape sequences
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
+}
+#endif
 
 void printUsage(const char* progName) {
     std::cout << "Usage: " << progName << " [OPTIONS] <file.md>\n\n";
@@ -29,6 +50,10 @@ void printVersion() {
 }
 
 int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    initWindowsConsole();
+#endif
+
     if (argc < 2) {
         printUsage(argv[0]);
         return 3;

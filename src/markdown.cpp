@@ -401,23 +401,23 @@ std::vector<std::string> MarkdownRenderer::renderTable(const std::vector<std::ve
     // Render each row
     for (size_t rowIdx = 0; rowIdx < rows.size(); ++rowIdx) {
         const auto& row = rows[rowIdx];
-        
+
         std::string line = Color::BrightBlack + "|" + Color::Reset;
         for (size_t i = 0; i < numCols; ++i) {
             std::string cellContent = (i < row.size()) ? row[i] : "";
             std::string processedCell = getProcessedCell(cellContent);
             size_t cellVisibleWidth = visibleWidth(processedCell);
-            
+
             // Calculate padding based on visible width
             size_t padding = (colWidths[i] > cellVisibleWidth) ? (colWidths[i] - cellVisibleWidth) : 0;
-            
+
             // Apply formatting: header row (first row) gets bold cyan
             if (rowIdx == 0) {
-                line += " " + Color::Bold + Color::BrightCyan + cellContent + Color::Reset;
+                line += " " + Color::Bold + Color::BrightCyan + processedCell + Color::Reset;
             } else {
                 line += " " + processedCell;
             }
-            
+
             line += std::string(padding + 1, ' ') + Color::BrightBlack + "|" + Color::Reset;
         }
         output.push_back(line);
@@ -444,23 +444,54 @@ std::vector<std::string> MarkdownRenderer::renderTable(const std::vector<std::ve
     return output;
 }
 
-// Calculate visible width by stripping ANSI escape codes
+// Calculate visible width by stripping ANSI escape codes and handling UTF-8
 size_t MarkdownRenderer::visibleWidth(const std::string& str) {
     size_t width = 0;
     bool inEscape = false;
-    
-    for (size_t i = 0; i < str.length(); ++i) {
-        if (str[i] == '\033') {
+
+    for (size_t i = 0; i < str.length(); ) {
+        unsigned char c = static_cast<unsigned char>(str[i]);
+        
+        if (c == '\033') {
             inEscape = true;
+            ++i;
         } else if (inEscape) {
-            if (str[i] == 'm') {
+            if (c == 'm') {
                 inEscape = false;
             }
+            ++i;
         } else {
-            ++width;
+            // UTF-8 character width detection
+            if (c < 0x80) {
+                // ASCII (1 byte) - single width
+                ++width;
+                ++i;
+            } else if (c < 0xC0) {
+                // Continuation byte (skip)
+                ++i;
+            } else if (c < 0xE0) {
+                // 2-byte UTF-8 character - single width
+                ++i;
+                if (i < str.length()) ++i;
+                ++width;
+            } else if (c < 0xF0) {
+                // 3-byte UTF-8 character
+                // Most symbols (like ↓↑) are single-width in modern terminals
+                // Only CJK characters are typically double-width
+                i += 3;
+                width += 1;  // Treat as single width for compatibility
+            } else if (c < 0xF8) {
+                // 4-byte UTF-8 character
+                i += 4;
+                width += 2;
+            } else {
+                // Invalid UTF-8, treat as single character
+                ++i;
+                ++width;
+            }
         }
     }
-    
+
     return width;
 }
 

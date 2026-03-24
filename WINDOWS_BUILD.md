@@ -37,14 +37,17 @@ cd mdless
 mkdir build
 cd build
 
-# Configure with MinGW toolchain
+# Configure with MinGW toolchain (using GCC for best compatibility)
 cmake .. -G "MinGW Makefiles" ^
-  -DCMAKE_CXX_COMPILER=D:/mingw64/bin/clang++.exe ^
-  -DCMAKE_MAKE_PROGRAM=D:/mingw64/bin/mingw32-make.exe
+  -DCMAKE_CXX_COMPILER=D:/mingw64/bin/g++.exe ^
+  -DCMAKE_MAKE_PROGRAM=D:/mingw64/bin/mingw32-make.exe ^
+  -DCMAKE_EXE_LINKER_FLAGS="-static"
 
 # Build
 mingw32-make.exe
 ```
+
+**Note:** The `-static` flag creates a standalone executable without requiring DLL files.
 
 ### Using MSYS2
 
@@ -83,7 +86,13 @@ The project requires:
 
 ## Running
 
-After building, copy **all files** from the build directory to your target location:
+After building, the executable is located in the `build` directory.
+
+**With static linking (`-static` flag):**
+- Only `mdless.exe` is needed (no DLL dependencies)
+
+**Without static linking:**
+Copy all files from the build directory to your target location:
 - `mdless.exe` (executable)
 - `libgcc_s_seh-1.dll` (MinGW runtime)
 - `libstdc++-6.dll` (MinGW C++ runtime)
@@ -139,3 +148,9 @@ After building, copy **all files** from the build directory to your target locat
 - Ensure CMake 3.14+ is installed
 - Check compiler path is in `%PATH%` or use full paths
 - For winlibs: use `mingw32-make.exe`, not `make`
+- If you get "Permission denied" errors, close any running instance of `mdless.exe` before rebuilding
+
+### UTF-8 / Character display issues
+- The application now initializes the console to UTF-8 mode automatically
+- Arrow symbols (↓↑) and other Unicode characters require a UTF-8 capable terminal
+- Windows Terminal is recommended for best Unicode support
