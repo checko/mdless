@@ -106,62 +106,41 @@ int Terminal::getCols() const {
 }
 
 int Terminal::readKey() {
-    INPUT_RECORD record;
-    DWORD eventsRead;
-    
-    // Peek to check if there are events
-    DWORD keysAvailable;
-    if (!GetNumberOfConsoleInputEvents(hStdin, &keysAvailable)) {
-        return -1;
-    }
-    
-    if (keysAvailable == 0) {
-        // No input available
-        return -1;
-    }
-    
-    // Read the input record
-    if (!ReadConsoleInput(hStdin, &record, 1, &eventsRead)) {
-        return -1;
-    }
-    
-    if (record.EventType == KEY_EVENT && record.Event.KeyEvent.bKeyDown) {
+    // Block until we get a usable key-down event. ReadConsoleInput blocks
+    // until at least one input record is available, so this loop only
+    // spins on uninteresting events (key-up, resize, focus, mouse, etc.).
+    while (true) {
+        INPUT_RECORD record;
+        DWORD eventsRead = 0;
+        if (!ReadConsoleInput(hStdin, &record, 1, &eventsRead) || eventsRead == 0) {
+            return -1;
+        }
+
+        if (record.EventType != KEY_EVENT || !record.Event.KeyEvent.bKeyDown) {
+            continue;
+        }
+
         DWORD keyCode = record.Event.KeyEvent.wVirtualKeyCode;
         char charCode = record.Event.KeyEvent.uChar.AsciiChar;
-        
-        // Handle special keys
+
         switch (keyCode) {
-            case VK_ESCAPE:
-                return KEY_ESCAPE;
-            case VK_RETURN:
-                return KEY_ENTER;
-            case VK_UP:
-                return KEY_UP;
-            case VK_DOWN:
-                return KEY_DOWN;
-            case VK_LEFT:
-                return KEY_LEFT;
-            case VK_RIGHT:
-                return KEY_RIGHT;
-            case VK_PRIOR:
-                return KEY_PAGEUP;
-            case VK_NEXT:
-                return KEY_PAGEDOWN;
-            case VK_HOME:
-                return KEY_HOME;
-            case VK_END:
-                return KEY_END;
-            case VK_DELETE:
-                return 127;  // Similar to backspace
+            case VK_ESCAPE: return KEY_ESCAPE;
+            case VK_RETURN: return KEY_ENTER;
+            case VK_UP:     return KEY_UP;
+            case VK_DOWN:   return KEY_DOWN;
+            case VK_LEFT:   return KEY_LEFT;
+            case VK_RIGHT:  return KEY_RIGHT;
+            case VK_PRIOR:  return KEY_PAGEUP;
+            case VK_NEXT:   return KEY_PAGEDOWN;
+            case VK_HOME:   return KEY_HOME;
+            case VK_END:    return KEY_END;
+            case VK_DELETE: return 127;
         }
-        
-        // Handle character keys
+
         if (charCode != 0) {
-            return charCode;
+            return static_cast<unsigned char>(charCode);
         }
     }
-    
-    return -1;
 }
 
 void Terminal::clearScreen() {
