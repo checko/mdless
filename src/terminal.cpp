@@ -40,12 +40,15 @@ void Terminal::enableRawMode() {
         return;
     }
     
-    // Enable virtual terminal input for escape sequences
-    // Disable echo and line buffering for raw-like behavior
-    DWORD newInputMode = origInputMode | ENABLE_VIRTUAL_TERMINAL_INPUT;
+    // Disable echo and line buffering for raw-like behavior. We read input
+    // via ReadConsoleInput and dispatch on virtual-key codes directly, so
+    // ENABLE_VIRTUAL_TERMINAL_INPUT must stay OFF — otherwise arrow / PgUp /
+    // PgDn keys arrive as VT escape sequences instead of KEY_EVENT records.
+    DWORD newInputMode = origInputMode;
     newInputMode &= ~ENABLE_ECHO_INPUT;
     newInputMode &= ~ENABLE_LINE_INPUT;
     newInputMode &= ~ENABLE_MOUSE_INPUT;
+    newInputMode &= ~ENABLE_VIRTUAL_TERMINAL_INPUT;
     
     if (!SetConsoleMode(hStdin, newInputMode)) {
         return;
